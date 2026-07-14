@@ -97,8 +97,10 @@ All watchers are location triggered. The trigger location is picked on a map
 
 1. Loads the watcher and validates enabled state, notification toggle, and
    the day/time window.
-2. Fires at most once per calendar day, comparing the local date of
-   `lastTriggeredAt` against today.
+2. Fires at most once per window occurrence:
+   `Watcher.hasFiredInCurrentWindow` gates on whether `lastTriggeredAt`
+   falls after the current window opened, so the gate resets at the next
+   window start rather than after a full day.
 3. Resolves the route origin from the current device position, falling back
    to the trigger location when no fix is available.
 4. Fetches connections, selects the best one, formats it, and posts a high

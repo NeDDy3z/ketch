@@ -51,9 +51,9 @@ Read it as: board train R41 at Praha hl.n. at 16:00, transfer to bus 660 at
 Cesky Brod at 16:30, arrive at Kostelec n.C. lesy at 17:00. The emoji shows
 the vehicle type of each boarding. Walking to and from stops is never shown.
 
-A watcher fires at most once per day. After a notification it stays quiet
-until the next day, so you do not get duplicates while moving around the
-trigger area.
+A watcher fires at most once per time window. After a notification it stays
+quiet until the next window opens, so you do not get duplicates while moving
+around the trigger area.
 
 ## Home screen
 

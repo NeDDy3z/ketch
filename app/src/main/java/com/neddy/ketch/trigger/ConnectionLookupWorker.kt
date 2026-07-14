@@ -8,9 +8,8 @@ import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
 import com.neddy.ketch.domain.model.StopPlace
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * Looks up the current fastest connection for one watcher and posts the
@@ -33,15 +32,11 @@ class ConnectionLookupWorker(
         if (!watcher.enabled || !watcher.notificationsEnabled) return Result.success()
         if (!watcher.isActiveAt(LocalDateTime.now())) return Result.success()
 
-        // Fire at most once per calendar day per watcher.
+        // Fire at most once per time window. The gate resets at the next
+        // window start instead of requiring a calendar day to pass.
+        if (watcher.hasFiredInCurrentWindow(ZonedDateTime.now())) return Result.success()
+
         val now = Instant.now()
-        val last = watcher.lastTriggeredAt
-        if (last != null) {
-            val lastDate = Instant.ofEpochMilli(last)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-            if (lastDate == LocalDate.now()) return Result.success()
-        }
 
         val location = container.locationProvider.currentLocation()
         val origin = StopPlace(

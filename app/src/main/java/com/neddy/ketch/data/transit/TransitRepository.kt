@@ -1,5 +1,6 @@
 package com.neddy.ketch.data.transit
 
+import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.TransitConnection
 import java.time.Instant
@@ -31,4 +32,10 @@ interface TransitRepository {
      * stop exists within a reasonable walking distance.
      */
     suspend fun nearestStop(latitude: Double, longitude: Double): StopPlace?
+
+    /**
+     * Searches addresses and places matching [query] for the map picker,
+     * returning at most a few suggestions.
+     */
+    suspend fun searchAddresses(query: String): List<PlaceSuggestion>
 }

@@ -2,6 +2,7 @@ package com.neddy.ketch.data.transit.google
 
 import com.neddy.ketch.data.settings.SettingsRepository
 import com.neddy.ketch.data.transit.TransitRepository
+import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.TransitLeg
@@ -49,6 +50,28 @@ class GoogleTransitRepository(
                 longitude = location.longitude,
             )
         }
+    }
+
+    override suspend fun searchAddresses(query: String): List<PlaceSuggestion> {
+        if (query.isBlank()) return emptyList()
+        val response = placesApi.searchText(
+            apiKey = apiKey(),
+            request = SearchTextRequest(
+                textQuery = query,
+                includedType = null,
+                maxResultCount = MAX_ADDRESS_SUGGESTIONS,
+            ),
+        )
+        return response.places.mapNotNull { place ->
+            val name = place.displayName?.text ?: return@mapNotNull null
+            val location = place.location ?: return@mapNotNull null
+            PlaceSuggestion(
+                name = name,
+                address = place.formattedAddress,
+                latitude = location.latitude,
+                longitude = location.longitude,
+            )
+        }.take(MAX_ADDRESS_SUGGESTIONS)
     }
 
     override suspend fun nearestStop(latitude: Double, longitude: Double): StopPlace? {
@@ -116,5 +139,6 @@ class GoogleTransitRepository(
 
     companion object {
         private const val NEAREST_STOP_RADIUS_METERS = 500.0
+        private const val MAX_ADDRESS_SUGGESTIONS = 3
     }
 }

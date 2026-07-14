@@ -22,8 +22,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -82,18 +84,15 @@ fun WatcherEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (watcherId == null) "New watcher" else "Edit watcher") },
+                title = {
+                    Text(
+                        text = if (watcherId == null) "New watcher" else "Edit watcher",
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    TextButton(
-                        onClick = viewModel::save,
-                        enabled = state.canSave,
-                    ) {
-                        Text("Save")
                     }
                 },
             )
@@ -123,8 +122,8 @@ fun WatcherEditScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             OutlinedTextField(
                 value = state.name,
@@ -135,7 +134,6 @@ fun WatcherEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SectionTitle("Icon")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(watcherIconCatalog, key = { it.first }) { (key, image) ->
                     FilledIconButton(
@@ -145,7 +143,7 @@ fun WatcherEditScreen(
                         } else {
                             IconButtonDefaults.filledTonalIconButtonColors()
                         },
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(44.dp),
                     ) {
                         Icon(imageVector = image, contentDescription = key)
                     }
@@ -161,39 +159,32 @@ fun WatcherEditScreen(
                 error = state.searchError,
                 onQueryChange = viewModel::setDestinationQuery,
                 onSelect = viewModel::selectDestination,
+                onOpenMap = { mapPickerTarget = MapPickerTarget.DESTINATION },
             )
-            OutlinedButton(onClick = { mapPickerTarget = MapPickerTarget.DESTINATION }) {
-                Icon(Icons.Filled.Map, contentDescription = null)
-                Text(
-                    text = "Pick on map",
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
 
-            SectionTitle("Trigger location")
-            Text(
-                text = "Ketch fires when you leave this place. The route then starts " +
-                    "from wherever you are.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = if (state.hasTriggerLocation) {
-                    "Trigger location: %.5f, %.5f".format(
-                        state.triggerLatitude,
-                        state.triggerLongitude,
-                    )
-                } else {
-                    "No trigger location set yet"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
-                Icon(Icons.Filled.Map, contentDescription = null)
+            SectionTitle("Trigger")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "Pick on map",
-                    modifier = Modifier.padding(start = 8.dp),
+                    text = if (state.hasTriggerLocation) {
+                        "Fires when you leave %.5f, %.5f".format(
+                            state.triggerLatitude,
+                            state.triggerLongitude,
+                        )
+                    } else {
+                        "Where does this watcher fire when you leave?"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
+                FilledTonalButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
+                    Icon(Icons.Filled.Map, contentDescription = null)
+                    Text(text = "Map", modifier = Modifier.padding(start = 6.dp))
+                }
             }
             Text(
                 text = "Leave radius: ${state.triggerRadiusMeters} m",
@@ -206,7 +197,7 @@ fun WatcherEditScreen(
                 steps = 8,
             )
 
-            SectionTitle("Active days")
+            SectionTitle("When")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -221,8 +212,6 @@ fun WatcherEditScreen(
                     )
                 }
             }
-
-            SectionTitle("Time window")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -292,7 +281,7 @@ fun WatcherEditScreen(
             ) {
                 Text("Save watcher")
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 
@@ -319,6 +308,7 @@ fun WatcherEditScreen(
             currentLocation = {
                 viewModel.currentLocation()?.let { (lat, lng) -> LatLng(lat, lng) }
             },
+            searchPlaces = viewModel::searchAddresses,
             onDismiss = { mapPickerTarget = null },
             onPick = { latLng ->
                 if (isTrigger) {
@@ -339,6 +329,7 @@ private fun SectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
     )
 }
@@ -352,6 +343,7 @@ private fun DestinationSearchField(
     error: String?,
     onQueryChange: (String) -> Unit,
     onSelect: (StopPlace) -> Unit,
+    onOpenMap: () -> Unit,
 ) {
     Column {
         OutlinedTextField(
@@ -362,7 +354,7 @@ private fun DestinationSearchField(
             singleLine = true,
             supportingText = {
                 if (query.isNotBlank() && !selected && results.isEmpty() && !searching) {
-                    Text("Pick a stop from the search results")
+                    Text("Pick a stop from the results or the map")
                 }
             },
             trailingIcon = {
@@ -373,6 +365,10 @@ private fun DestinationSearchField(
                             .height(20.dp),
                         strokeWidth = 2.dp,
                     )
+                } else {
+                    IconButton(onClick = onOpenMap) {
+                        Icon(Icons.Filled.Map, contentDescription = "Pick on map")
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth(),

@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class SearchTextRequest(
     val textQuery: String,
-    val includedType: String = "transit_station",
+    /** Null searches all place types, used for address lookups. */
+    val includedType: String? = "transit_station",
     val maxResultCount: Int = 10,
 )
 

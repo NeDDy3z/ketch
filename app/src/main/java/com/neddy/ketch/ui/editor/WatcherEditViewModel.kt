@@ -3,6 +3,7 @@ package com.neddy.ketch.ui.editor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.di.AppContainer
+import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
@@ -178,6 +179,11 @@ class WatcherEditViewModel(
     suspend fun currentLocation(): Pair<Double, Double>? =
         container.locationProvider.currentLocation(precise = true)
             ?.let { it.latitude to it.longitude }
+
+    /** Address suggestions for the map picker search, empty on failure. */
+    suspend fun searchAddresses(query: String): List<PlaceSuggestion> =
+        runCatching { container.transitRepository.searchAddresses(query) }
+            .getOrDefault(emptyList())
 
     /**
      * Resolves a map pick to the nearest transit stop and uses it as the

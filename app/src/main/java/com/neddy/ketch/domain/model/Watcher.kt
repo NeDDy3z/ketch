@@ -3,6 +3,7 @@ package com.neddy.ketch.domain.model
 import java.time.DayOfWeek
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZonedDateTime
 
 /**
  * A watcher describes one commute the user wants to be notified about,
@@ -42,6 +43,21 @@ data class Watcher(
         if (dateTime.dayOfWeek !in activeDays) return false
         val minutes = dateTime.hour * 60 + dateTime.minute
         return minutes in windowStartMinutes..windowEndMinutes
+    }
+
+    /**
+     * True when the watcher already fired inside the time window that is
+     * open at [now]. The gate resets at the next window start, so a full
+     * 24 hours never needs to pass between two windows.
+     */
+    fun hasFiredInCurrentWindow(now: ZonedDateTime): Boolean {
+        val last = lastTriggeredAt ?: return false
+        val windowOpenedAt = now.toLocalDate()
+            .atTime(windowStart)
+            .atZone(now.zone)
+            .toInstant()
+            .toEpochMilli()
+        return last >= windowOpenedAt
     }
 
     companion object {
