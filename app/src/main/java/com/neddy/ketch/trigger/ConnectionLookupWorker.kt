@@ -8,7 +8,9 @@ import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
 import com.neddy.ketch.domain.model.StopPlace
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * Looks up the current fastest connection for one watcher and posts the
@@ -31,10 +33,14 @@ class ConnectionLookupWorker(
         if (!watcher.enabled || !watcher.notificationsEnabled) return Result.success()
         if (!watcher.isActiveAt(LocalDateTime.now())) return Result.success()
 
+        // Fire at most once per calendar day per watcher.
         val now = Instant.now()
         val last = watcher.lastTriggeredAt
-        if (last != null && now.toEpochMilli() - last < COOLDOWN_MILLIS) {
-            return Result.success()
+        if (last != null) {
+            val lastDate = Instant.ofEpochMilli(last)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+            if (lastDate == LocalDate.now()) return Result.success()
         }
 
         val location = container.locationProvider.currentLocation()
@@ -73,8 +79,5 @@ class ConnectionLookupWorker(
     companion object {
         const val KEY_WATCHER_ID = "watcher_id"
         private const val MAX_RETRIES = 3
-
-        /** Suppress repeated notifications for the same watcher for 30 minutes. */
-        const val COOLDOWN_MILLIS = 30L * 60L * 1000L
     }
 }

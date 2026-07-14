@@ -97,8 +97,8 @@ All watchers are location triggered. The trigger location is picked on a map
 
 1. Loads the watcher and validates enabled state, notification toggle, and
    the day/time window.
-2. Applies a 30 minute cooldown based on `lastTriggeredAt` to prevent
-   duplicate notifications.
+2. Fires at most once per calendar day, comparing the local date of
+   `lastTriggeredAt` against today.
 3. Resolves the route origin from the current device position, falling back
    to the trigger location when no fix is available.
 4. Fetches connections, selects the best one, formats it, and posts a high
