@@ -42,9 +42,9 @@ title is the first boarding, the body continues with the transfers and the
 arrival, one per line:
 
 ```
-🚆 Praha hl.n. (R41) 16:00
-🚌 Cesky Brod (660) 16:30
-Kostelec n.C. lesy 17:00
+16:00 Praha hl.n. (R41) 🚆
+16:30 Cesky Brod (660) 🚌
+17:00 K.n.C.l, nam.
 ```
 
 Read it as: board train R41 at Praha hl.n. at 16:00, transfer to bus 660 at
