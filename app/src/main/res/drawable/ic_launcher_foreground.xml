@@ -9,6 +9,11 @@
         android:height="108dp"
         android:viewportWidth="108"
         android:viewportHeight="108">
+    <group
+            android:scaleX="0.72"
+            android:scaleY="0.72"
+            android:pivotX="54"
+            android:pivotY="54">
     <!-- Train body with windshield and headlight cutouts -->
     <path
             android:fillColor="#FFFFFF"
@@ -59,4 +64,5 @@
     <path
             android:fillColor="#FFFFFF"
             android:pathData="M32,87h44v3h-44z" />
+    </group>
 </vector>
