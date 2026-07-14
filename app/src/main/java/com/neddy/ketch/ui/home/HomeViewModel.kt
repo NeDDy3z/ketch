@@ -78,8 +78,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             val location = container.locationProvider.quickLocation()
             val ordered = orderByProximity(watchers, location)
 
-            // Show one skeleton card per watcher right away and fill each in
-            // as its lookup finishes, instead of waiting for the slowest.
+            // Show one skeleton card per watcher right away, then resolve
+            // them one by one in proximity order so the most relevant
+            // connection appears as soon as possible.
             _uiState.value = HomeUiState(
                 loading = false,
                 hasWatchers = true,
@@ -88,13 +89,11 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 },
             )
             ordered.forEachIndexed { index, watcher ->
-                launch {
-                    val result = lookup(watcher, location)
-                    _uiState.update { state ->
-                        val connections = state.watcherConnections.toMutableList()
-                        if (index < connections.size) connections[index] = result
-                        state.copy(watcherConnections = connections)
-                    }
+                val result = lookup(watcher, location)
+                _uiState.update { state ->
+                    val connections = state.watcherConnections.toMutableList()
+                    if (index < connections.size) connections[index] = result
+                    state.copy(watcherConnections = connections)
                 }
             }
         }
