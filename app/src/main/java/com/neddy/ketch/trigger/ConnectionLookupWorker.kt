@@ -62,8 +62,9 @@ class ConnectionLookupWorker(
 
         container.notificationHelper.notifyConnection(
             watcher,
-            ConnectionFormatter.format(best),
-            ConnectionFormatter.formatMultiline(best),
+            ConnectionFormatter.notificationTitle(best),
+            ConnectionFormatter.notificationText(best),
+            ConnectionFormatter.notificationBigText(best),
         )
         container.watcherRepository.markTriggered(watcher.id, now.toEpochMilli())
         return Result.success()

@@ -73,8 +73,10 @@ the same interface.
   boardings only. Transfers and total duration are derived properties.
 - `ConnectionSelector.selectBest` filters connections by the optional limits
   and picks the earliest arrival, breaking ties by fewer transfers.
-- `ConnectionFormatter.format` renders the notification line
-  `"stop (line) time - stop (line) time - stop time"`.
+- `ConnectionFormatter` renders the notification: the title is the first
+  boarding as `"emoji stop (line) time"`, the body continues with the
+  remaining boardings and the arrival, one per line in the expanded view.
+  The emoji is derived from the transit vehicle type.
 
 ## Trigger layer
 

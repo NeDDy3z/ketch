@@ -35,11 +35,12 @@ class NotificationHelper(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
 
     /**
-     * Posts the connection notification for [watcher]. The [connectionLine]
-     * follows the "stop (line) time - ... - stop time" format and is shown
-     * collapsed; [expandedText] carries the same stops on separate lines.
+     * Posts the connection notification for [watcher]. The [title] carries
+     * the first boarding with its departure time, [text] the rest of the
+     * route collapsed to one line, and [expandedText] the same stops on
+     * separate lines.
      */
-    fun notifyConnection(watcher: Watcher, connectionLine: String, expandedText: String) {
+    fun notifyConnection(watcher: Watcher, title: String, text: String, expandedText: String) {
         if (!hasPermission()) return
 
         val contentIntent = PendingIntent.getActivity(
@@ -51,8 +52,8 @@ class NotificationHelper(private val context: Context) {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_CONNECTIONS)
             .setSmallIcon(R.drawable.ic_train)
-            .setContentTitle(watcher.name)
-            .setContentText(connectionLine)
+            .setContentTitle(title)
+            .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_EVENT)

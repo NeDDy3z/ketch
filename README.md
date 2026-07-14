@@ -16,12 +16,14 @@ and a time window. When you leave that location inside the window, Ketch looks
 up the current fastest connection and sends a notification like:
 
 ```
-Praha hl.n. (R41) 16:00 - Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00
+🚆 Praha hl.n. (R41) 16:00
+🚌 Cesky Brod (660) 16:30
+Kostelec n.C. lesy 17:00
 ```
 
-The first entry is the nearest boarding stop with its line code and departure
-time, the middle entries are transfers, and the last entry is the final stop
-with the arrival time. Walking segments are always excluded.
+The title is the nearest boarding stop with its line code, departure time,
+and vehicle emoji. The body continues with transfers and ends with the final
+stop and arrival time. Walking segments are always excluded.
 
 ## Features
 

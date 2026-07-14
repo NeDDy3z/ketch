@@ -17,86 +17,83 @@ class ConnectionFormatterTest {
         departure: String,
         to: String,
         arrival: String,
+        vehicleType: String = "BUS",
     ) = TransitLeg(
         lineCode = line,
-        vehicleType = "BUS",
+        vehicleType = vehicleType,
         departureStop = from,
         departureTime = Instant.parse(departure),
         arrivalStop = to,
         arrivalTime = Instant.parse(arrival),
     )
 
-    @Test
-    fun `formats connection with transfer`() {
-        val connection = TransitConnection(
-            legs = listOf(
-                leg(
-                    "R41",
-                    "Praha hl.n.",
-                    "2026-07-14T14:00:00Z",
-                    "Cesky Brod",
-                    "2026-07-14T14:28:00Z",
-                ),
-                leg(
-                    "660",
-                    "Cesky Brod",
-                    "2026-07-14T14:30:00Z",
-                    "Kostelec n.C. lesy",
-                    "2026-07-14T15:00:00Z",
-                ),
+    private val withTransfer = TransitConnection(
+        legs = listOf(
+            leg(
+                "R41",
+                "Praha hl.n.",
+                "2026-07-14T14:00:00Z",
+                "Cesky Brod",
+                "2026-07-14T14:28:00Z",
+                vehicleType = "HEAVY_RAIL",
             ),
-        )
+            leg(
+                "660",
+                "Cesky Brod",
+                "2026-07-14T14:30:00Z",
+                "Kostelec n.C. lesy",
+                "2026-07-14T15:00:00Z",
+                vehicleType = "BUS",
+            ),
+        ),
+    )
 
+    private val direct = TransitConnection(
+        legs = listOf(
+            leg(
+                "S1",
+                "Praha hl.n.",
+                "2026-07-14T14:00:00Z",
+                "Kolin",
+                "2026-07-14T14:45:00Z",
+                vehicleType = "COMMUTER_TRAIN",
+            ),
+        ),
+    )
+
+    @Test
+    fun `title is the first boarding with vehicle emoji`() {
         assertEquals(
-            "Praha hl.n. (R41) 16:00 - Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00",
-            ConnectionFormatter.format(connection, zone),
+            "🚆 Praha hl.n. (R41) 16:00",
+            ConnectionFormatter.notificationTitle(withTransfer, zone),
         )
     }
 
     @Test
-    fun `formats connection with each stop on its own line`() {
-        val connection = TransitConnection(
-            legs = listOf(
-                leg(
-                    "R41",
-                    "Praha hl.n.",
-                    "2026-07-14T14:00:00Z",
-                    "Cesky Brod",
-                    "2026-07-14T14:28:00Z",
-                ),
-                leg(
-                    "660",
-                    "Cesky Brod",
-                    "2026-07-14T14:30:00Z",
-                    "Kostelec n.C. lesy",
-                    "2026-07-14T15:00:00Z",
-                ),
-            ),
-        )
-
+    fun `text continues after the first boarding on one line`() {
         assertEquals(
-            "Praha hl.n. (R41) 16:00\nCesky Brod (660) 16:30\nKostelec n.C. lesy 17:00",
-            ConnectionFormatter.formatMultiline(connection, zone),
+            "🚌 Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00",
+            ConnectionFormatter.notificationText(withTransfer, zone),
         )
     }
 
     @Test
-    fun `formats direct connection`() {
-        val connection = TransitConnection(
-            legs = listOf(
-                leg(
-                    "S1",
-                    "Praha hl.n.",
-                    "2026-07-14T14:00:00Z",
-                    "Kolin",
-                    "2026-07-14T14:45:00Z",
-                ),
-            ),
-        )
-
+    fun `big text continues after the first boarding on separate lines`() {
         assertEquals(
-            "Praha hl.n. (S1) 16:00 - Kolin 16:45",
-            ConnectionFormatter.format(connection, zone),
+            "🚌 Cesky Brod (660) 16:30\nKostelec n.C. lesy 17:00",
+            ConnectionFormatter.notificationBigText(withTransfer, zone),
+        )
+    }
+
+    @Test
+    fun `direct connection body is just the arrival`() {
+        assertEquals(
+            "🚆 Praha hl.n. (S1) 16:00",
+            ConnectionFormatter.notificationTitle(direct, zone),
+        )
+        assertEquals(
+            "Kolin 16:45",
+            ConnectionFormatter.notificationBigText(direct, zone),
         )
     }
 }

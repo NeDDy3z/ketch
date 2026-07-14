@@ -37,16 +37,19 @@ both ways, create two watchers, one for each direction.
 ## How notifications work
 
 When a watcher fires, Ketch looks up the current fastest connection from
-your current position to the destination stop and posts a notification such
-as:
+your current position to the destination stop and posts a notification. The
+title is the first boarding, the body continues with the transfers and the
+arrival, one per line:
 
 ```
-Praha hl.n. (R41) 16:00 - Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00
+🚆 Praha hl.n. (R41) 16:00
+🚌 Cesky Brod (660) 16:30
+Kostelec n.C. lesy 17:00
 ```
 
-Read it as: board line R41 at Praha hl.n. at 16:00, transfer to line 660 at
-Cesky Brod at 16:30, arrive at Kostelec n.C. lesy at 17:00. Walking to and
-from stops is never shown.
+Read it as: board train R41 at Praha hl.n. at 16:00, transfer to bus 660 at
+Cesky Brod at 16:30, arrive at Kostelec n.C. lesy at 17:00. The emoji shows
+the vehicle type of each boarding. Walking to and from stops is never shown.
 
 A watcher will not fire again for 30 minutes after a notification, so you do
 not get duplicates while moving around the trigger area.
