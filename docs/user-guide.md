@@ -70,6 +70,15 @@ The Watchers tab lists all watchers. From here you can:
 - Delete a watcher with the trash icon
 - Tap a watcher to edit it
 
+## Home screen widget
+
+Long press your launcher home screen, open the widgets list, and drop the
+Ketch widget. A configuration screen opens where you tick the watchers the
+widget should show; you can pick several. The widget lists each selected
+watcher with its name and the current fastest connection, scrollable when
+they do not fit. The circle button in the top right corner re-fetches all
+connections. Tapping a row opens Ketch.
+
 ## Settings
 
 - Theme: light, dark, or follow the system.

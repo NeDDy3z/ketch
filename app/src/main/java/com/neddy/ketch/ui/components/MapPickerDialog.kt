@@ -1,5 +1,6 @@
 package com.neddy.ketch.ui.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -128,11 +129,8 @@ fun MapPickerDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            color = MaterialTheme.colorScheme.background,
+            modifier = Modifier.fillMaxSize(),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -202,6 +200,12 @@ fun MapPickerDialog(
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(vertical = 12.dp)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(20.dp),
+                        )
+                        .padding(4.dp)
                         .clip(RoundedCornerShape(16.dp)),
                 ) {
                     GoogleMap(

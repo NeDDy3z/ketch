@@ -1,6 +1,7 @@
 package com.neddy.ketch.ui.editor
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -150,6 +152,34 @@ fun WatcherEditScreen(
                 }
             }
 
+            SectionTitle("Trigger")
+            OutlinedTextField(
+                value = if (state.hasTriggerLocation) {
+                    "%.5f, %.5f".format(state.triggerLatitude, state.triggerLongitude)
+                } else {
+                    ""
+                },
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Trigger location") },
+                placeholder = { Text("Pick where you leave from") },
+                supportingText = { Text("Fires when you leave this place") },
+                trailingIcon = {
+                    IconButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
+                        Icon(Icons.Filled.Map, contentDescription = "Pick on map")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Leave radius: ${state.triggerRadiusMeters} m",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            RadiusSlider(
+                value = state.triggerRadiusMeters,
+                onValueChange = viewModel::setTriggerRadius,
+            )
+
             SectionTitle("Destination")
             DestinationSearchField(
                 query = state.destinationQuery,
@@ -160,41 +190,6 @@ fun WatcherEditScreen(
                 onQueryChange = viewModel::setDestinationQuery,
                 onSelect = viewModel::selectDestination,
                 onOpenMap = { mapPickerTarget = MapPickerTarget.DESTINATION },
-            )
-
-            SectionTitle("Trigger")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (state.hasTriggerLocation) {
-                        "Fires when you leave %.5f, %.5f".format(
-                            state.triggerLatitude,
-                            state.triggerLongitude,
-                        )
-                    } else {
-                        "Where does this watcher fire when you leave?"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                FilledTonalButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
-                    Icon(Icons.Filled.Map, contentDescription = null)
-                    Text(text = "Map", modifier = Modifier.padding(start = 6.dp))
-                }
-            }
-            Text(
-                text = "Leave radius: ${state.triggerRadiusMeters} m",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Slider(
-                value = state.triggerRadiusMeters.toFloat(),
-                onValueChange = { viewModel.setTriggerRadius(it.toInt()) },
-                valueRange = 100f..1000f,
-                steps = 8,
             )
 
             SectionTitle("When")
@@ -277,7 +272,9 @@ fun WatcherEditScreen(
             Button(
                 onClick = viewModel::save,
                 enabled = state.canSave,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
             ) {
                 Text("Save watcher")
             }
@@ -323,6 +320,28 @@ fun WatcherEditScreen(
 }
 
 private enum class MapPickerTarget { TRIGGER, DESTINATION }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RadiusSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Slider(
+        value = value.toFloat(),
+        onValueChange = { onValueChange(it.toInt()) },
+        valueRange = 100f..1000f,
+        steps = 8,
+        interactionSource = interactionSource,
+        thumb = {
+            SliderDefaults.Thumb(
+                interactionSource = interactionSource,
+                thumbSize = DpSize(4.dp, 28.dp),
+            )
+        },
+    )
+}
 
 @Composable
 private fun SectionTitle(text: String) {

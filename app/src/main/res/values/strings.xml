@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Ketch</string>
+    <string name="widget_description">Fastest connections for your watchers</string>
 </resources>

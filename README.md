@@ -34,6 +34,8 @@ stop and arrival time. Walking segments are always excluded.
 - Optional limits per watcher: maximum transfers and maximum travel time
 - Home screen showing the current fastest connection for each watcher,
   ordered by how close you are to each trigger location
+- Home screen widget showing live connections for selected watchers with a
+  manual refresh button
 - Material You design with dynamic colors, light, dark, and system themes
 - Skeleton loading states while lookups run
 - Local persistence with Room, settings in DataStore
