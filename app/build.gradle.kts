@@ -13,7 +13,7 @@ val localProperties = Properties().apply {
         file.inputStream().use { load(it) }
     }
 }
-val mapsApiKey: String = localProperties.getProperty("KETCH_MAPS_API_KEY") ?: ""
+val mapsApiKey: String = localProperties.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
 
 android {
     namespace = "com.neddy.ketch"

@@ -53,7 +53,7 @@ services using Retrofit with kotlinx.serialization:
   `transit_station` results for the stop pickers.
 
 The API key resolves at call time from DataStore, falling back to the
-`KETCH_MAPS_API_KEY` value from `local.properties` compiled into
+`GOOGLE_MAPS_API_KEY` value from `local.properties` compiled into
 `BuildConfig.MAPS_API_KEY`. A missing key raises `MissingApiKeyException`
 which surfaces in the UI.
 
@@ -147,7 +147,7 @@ All watchers are location triggered. The trigger location is picked on a map
 - Gradle 9.3.1, AGP 9.1.1, Kotlin 2.2.10 with built in Kotlin support,
   KSP for Room, kotlinx.serialization for JSON.
 - Version catalog in `gradle/libs.versions.toml`.
-- `KETCH_MAPS_API_KEY` in `local.properties` becomes
+- `GOOGLE_MAPS_API_KEY` in `local.properties` becomes
   `BuildConfig.MAPS_API_KEY`.
 - Release builds enable code and resource shrinking.
 

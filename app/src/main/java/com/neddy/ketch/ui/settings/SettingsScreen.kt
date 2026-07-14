@@ -108,7 +108,7 @@ fun SettingsScreen() {
                 supportingText = {
                     Text(
                         "Used for the Routes and Places APIs. Can also be provided " +
-                            "at build time via KETCH_MAPS_API_KEY in local.properties.",
+                            "at build time via GOOGLE_MAPS_API_KEY in local.properties.",
                     )
                 },
                 singleLine = true,

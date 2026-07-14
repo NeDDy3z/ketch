@@ -47,7 +47,7 @@ with the arrival time. Walking segments are always excluded.
 
 1. Clone the project and open it in Android Studio.
 2. Provide the API key one of two ways:
-   - Add `KETCH_MAPS_API_KEY=your_key_here` to `local.properties`, or
+   - Add `GOOGLE_MAPS_API_KEY=your_key_here` to `local.properties`, or
    - Build the app and paste the key into Settings at runtime.
 3. Build and run the `app` configuration.
 
