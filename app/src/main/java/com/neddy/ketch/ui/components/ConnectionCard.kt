@@ -42,6 +42,7 @@ fun ConnectionCard(
     title: String,
     connection: TransitConnection,
     modifier: Modifier = Modifier,
+    titleIcon: ImageVector? = null,
 ) {
     val zone = ZoneId.systemDefault()
     OutlinedCard(modifier = modifier.fillMaxWidth()) {
@@ -54,10 +55,20 @@ fun ConnectionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (titleIcon != null) {
+                        Icon(
+                            imageVector = titleIcon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
                 Text(
                     text = "${connection.travelDuration.toMinutes()} min",
                     style = MaterialTheme.typography.labelLarge,

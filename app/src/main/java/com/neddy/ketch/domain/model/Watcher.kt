@@ -6,15 +6,16 @@ import java.time.LocalTime
 
 /**
  * A watcher describes one commute the user wants to be notified about,
- * for example "home to work" or "work to home".
+ * for example "leaving home" or "leaving work". It fires when the device
+ * leaves the trigger location; the route starts at the current position.
  */
 data class Watcher(
     val id: Long = 0L,
     val name: String,
-    val origin: StopPlace,
+    /** Key of the icon shown for this watcher, see the UI icon catalog. */
+    val icon: String = DEFAULT_ICON,
     val destination: StopPlace,
-    val triggerType: TriggerType,
-    /** Center of the geofence for [TriggerType.LOCATION_EXIT] watchers. */
+    /** Center of the leave geofence. */
     val triggerLatitude: Double,
     val triggerLongitude: Double,
     val triggerRadiusMeters: Int,
@@ -41,5 +42,9 @@ data class Watcher(
         if (dateTime.dayOfWeek !in activeDays) return false
         val minutes = dateTime.hour * 60 + dateTime.minute
         return minutes in windowStartMinutes..windowEndMinutes
+    }
+
+    companion object {
+        const val DEFAULT_ICON = "train"
     }
 }

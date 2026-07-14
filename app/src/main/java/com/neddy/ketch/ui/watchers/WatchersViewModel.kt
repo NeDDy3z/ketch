@@ -25,7 +25,6 @@ class WatchersViewModel(private val container: AppContainer) : ViewModel() {
     fun delete(watcher: Watcher) {
         viewModelScope.launch {
             container.watcherRepository.delete(watcher)
-            container.timeTriggerScheduler.cancel(watcher.id)
             container.triggerSyncRequester.requestSync()
         }
     }

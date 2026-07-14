@@ -40,6 +40,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
+import com.neddy.ketch.ui.components.watcherIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +101,7 @@ fun HomeScreen(
                             ConnectionCard(
                                 title = item.watcher.name,
                                 connection = connection,
+                                titleIcon = watcherIcon(item.watcher.icon),
                             )
                         } else {
                             InfoCard(

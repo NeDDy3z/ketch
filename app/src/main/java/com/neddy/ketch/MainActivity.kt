@@ -91,10 +91,13 @@ fun KetchRoot() {
             }
         },
     ) { innerPadding ->
+        // Only consume the bottom bar inset here. Each screen hosts its own
+        // Scaffold with a TopAppBar that already handles the status bar
+        // inset, so applying the full padding would double the top spacing.
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
             composable(Routes.HOME) {
                 HomeScreen(

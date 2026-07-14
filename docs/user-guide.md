@@ -20,15 +20,13 @@ both ways, create two watchers, one for each direction.
 1. Open the Watchers tab and tap the add button in the bottom right corner.
 2. Fill in the fields:
    - Name: anything that helps you recognize the watcher.
-   - Start stop: search and pick the public transport stop you depart from.
+   - Icon: pick an icon for the watcher.
    - Destination stop: search and pick the stop you travel to.
-   - Trigger: choose "Leaving location" or "At time".
-     - Leaving location: the watcher fires when you leave the trigger
-       location. By default the trigger location is the start stop position.
-       Tap "Use current location" while at home or work to anchor it there.
-       The leave radius controls how far you must move before it fires.
-     - At time: the watcher fires at the start of the time window on each
-       active day.
+   - Trigger location: the watcher fires when you leave this place. Pick it
+     on the map, or tap "Current location" while at home or work to anchor
+     it there. The leave radius controls how far you must move before it
+     fires. The route itself always starts from wherever you are when the
+     watcher fires, so there is no start stop to configure.
    - Active days: the days of the week the watcher is allowed to fire.
    - Time window: the watcher only fires between these times.
    - Limits: optionally cap the number of transfers and the total travel
@@ -38,8 +36,9 @@ both ways, create two watchers, one for each direction.
 
 ## How notifications work
 
-When a watcher fires, Ketch looks up the current fastest connection from the
-start stop to the destination stop and posts a notification such as:
+When a watcher fires, Ketch looks up the current fastest connection from
+your current position to the destination stop and posts a notification such
+as:
 
 ```
 Praha hl.n. (R41) 16:00 - Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00

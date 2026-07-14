@@ -8,7 +8,6 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import com.neddy.ketch.data.location.LocationProvider
-import com.neddy.ketch.domain.model.TriggerType
 import com.neddy.ketch.domain.model.Watcher
 import kotlinx.coroutines.tasks.await
 
@@ -45,7 +44,7 @@ class GeofenceManager(private val context: Context) {
         runCatching { client.removeGeofences(pendingIntent).await() }
 
         val geofences = watchers
-            .filter { it.enabled && it.triggerType == TriggerType.LOCATION_EXIT }
+            .filter { it.enabled }
             .map { watcher ->
                 Geofence.Builder()
                     .setRequestId(requestId(watcher.id))

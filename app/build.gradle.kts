@@ -31,6 +31,7 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -78,6 +79,8 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 
     implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.retrofit)

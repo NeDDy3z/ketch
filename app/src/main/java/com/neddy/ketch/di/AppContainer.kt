@@ -11,7 +11,6 @@ import com.neddy.ketch.data.transit.google.PlacesApiService
 import com.neddy.ketch.data.transit.google.RoutesApiService
 import com.neddy.ketch.trigger.GeofenceManager
 import com.neddy.ketch.trigger.NotificationHelper
-import com.neddy.ketch.trigger.TimeTriggerScheduler
 import com.neddy.ketch.trigger.TriggerSyncRequester
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -63,8 +62,6 @@ class AppContainer(context: Context) {
     val notificationHelper: NotificationHelper by lazy { NotificationHelper(appContext) }
 
     val geofenceManager: GeofenceManager by lazy { GeofenceManager(appContext) }
-
-    val timeTriggerScheduler: TimeTriggerScheduler by lazy { TimeTriggerScheduler(appContext) }
 
     val triggerSyncRequester: TriggerSyncRequester by lazy { TriggerSyncRequester(appContext) }
 }

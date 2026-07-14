@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.model.StopPlace
-import com.neddy.ketch.domain.model.TriggerType
 import com.neddy.ketch.domain.model.Watcher
+import com.neddy.ketch.ui.components.userMessageFor
 import java.time.DayOfWeek
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -15,20 +15,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class StopField { ORIGIN, DESTINATION }
-
 data class EditUiState(
     val loading: Boolean = true,
     val name: String = "",
-    val origin: StopPlace? = null,
+    val icon: String = Watcher.DEFAULT_ICON,
     val destination: StopPlace? = null,
-    val originQuery: String = "",
     val destinationQuery: String = "",
-    val searchField: StopField? = null,
     val searchResults: List<StopPlace> = emptyList(),
     val searching: Boolean = false,
     val searchError: String? = null,
-    val triggerType: TriggerType = TriggerType.LOCATION_EXIT,
     val triggerLatitude: Double? = null,
     val triggerLongitude: Double? = null,
     val triggerRadiusMeters: Int = 150,
@@ -42,9 +37,12 @@ data class EditUiState(
     val saved: Boolean = false,
     val validationError: String? = null,
 ) {
+    val hasTriggerLocation: Boolean
+        get() = triggerLatitude != null && triggerLongitude != null
+
     val canSave: Boolean
-        get() = !saving && name.isNotBlank() && origin != null && destination != null &&
-            activeDays.isNotEmpty()
+        get() = !saving && name.isNotBlank() && destination != null &&
+            hasTriggerLocation && activeDays.isNotEmpty()
 }
 
 class WatcherEditViewModel(
@@ -79,11 +77,9 @@ class WatcherEditViewModel(
             EditUiState(
                 loading = false,
                 name = watcher.name,
-                origin = watcher.origin,
+                icon = watcher.icon,
                 destination = watcher.destination,
-                originQuery = watcher.origin.name,
                 destinationQuery = watcher.destination.name,
-                triggerType = watcher.triggerType,
                 triggerLatitude = watcher.triggerLatitude,
                 triggerLongitude = watcher.triggerLongitude,
                 triggerRadiusMeters = watcher.triggerRadiusMeters,
@@ -114,24 +110,20 @@ class WatcherEditViewModel(
 
     fun setName(value: String) = _uiState.update { it.copy(name = value) }
 
-    fun setStopQuery(field: StopField, query: String) {
+    fun setIcon(key: String) = _uiState.update { it.copy(icon = key) }
+
+    fun setDestinationQuery(query: String) {
         _uiState.update {
-            when (field) {
-                StopField.ORIGIN -> it.copy(
-                    originQuery = query,
-                    origin = if (query == it.origin?.name) it.origin else null,
-                    searchField = field,
-                )
-                StopField.DESTINATION -> it.copy(
-                    destinationQuery = query,
-                    destination = if (query == it.destination?.name) it.destination else null,
-                    searchField = field,
-                )
-            }
+            it.copy(
+                destinationQuery = query,
+                destination = if (query == it.destination?.name) it.destination else null,
+            )
         }
         searchJob?.cancel()
         if (query.length < 3) {
-            _uiState.update { it.copy(searchResults = emptyList(), searching = false) }
+            _uiState.update {
+                it.copy(searchResults = emptyList(), searching = false, searchError = null)
+            }
             return
         }
         searchJob = viewModelScope.launch {
@@ -139,50 +131,45 @@ class WatcherEditViewModel(
             _uiState.update { it.copy(searching = true, searchError = null) }
             try {
                 val results = container.transitRepository.searchStops(query)
-                _uiState.update { it.copy(searchResults = results, searching = false) }
+                _uiState.update {
+                    it.copy(
+                        searchResults = results,
+                        searching = false,
+                        searchError = if (results.isEmpty()) {
+                            "No stops found for \"$query\""
+                        } else {
+                            null
+                        },
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         searchResults = emptyList(),
                         searching = false,
-                        searchError = e.message ?: "Search failed",
+                        searchError = userMessageFor(e),
                     )
                 }
             }
         }
     }
 
-    fun selectStop(field: StopField, stop: StopPlace) {
-        _uiState.update {
-            when (field) {
-                StopField.ORIGIN -> it.copy(
-                    origin = stop,
-                    originQuery = stop.name,
-                    searchField = null,
-                    searchResults = emptyList(),
-                )
-                StopField.DESTINATION -> it.copy(
-                    destination = stop,
-                    destinationQuery = stop.name,
-                    searchField = null,
-                    searchResults = emptyList(),
-                )
-            }
-        }
-    }
-
-    fun swapStops() {
+    fun selectDestination(stop: StopPlace) {
         _uiState.update {
             it.copy(
-                origin = it.destination,
-                destination = it.origin,
-                originQuery = it.destinationQuery,
-                destinationQuery = it.originQuery,
+                destination = stop,
+                destinationQuery = stop.name,
+                searchResults = emptyList(),
+                searchError = null,
             )
         }
     }
 
-    fun setTriggerType(type: TriggerType) = _uiState.update { it.copy(triggerType = type) }
+    fun setTriggerLocation(latitude: Double, longitude: Double) {
+        _uiState.update {
+            it.copy(triggerLatitude = latitude, triggerLongitude = longitude)
+        }
+    }
 
     fun setTriggerRadius(meters: Int) =
         _uiState.update { it.copy(triggerRadiusMeters = meters) }
@@ -190,12 +177,7 @@ class WatcherEditViewModel(
     fun useCurrentLocationAsTrigger() {
         viewModelScope.launch {
             val location = container.locationProvider.currentLocation() ?: return@launch
-            _uiState.update {
-                it.copy(
-                    triggerLatitude = location.latitude,
-                    triggerLongitude = location.longitude,
-                )
-            }
+            setTriggerLocation(location.latitude, location.longitude)
         }
     }
 
@@ -221,11 +203,18 @@ class WatcherEditViewModel(
 
     fun save() {
         val state = _uiState.value
-        val origin = state.origin
         val destination = state.destination
-        if (origin == null || destination == null || state.name.isBlank()) {
+        val triggerLatitude = state.triggerLatitude
+        val triggerLongitude = state.triggerLongitude
+        if (destination == null || state.name.isBlank()) {
             _uiState.update {
-                it.copy(validationError = "Name, start and destination are required")
+                it.copy(validationError = "Name and destination are required")
+            }
+            return
+        }
+        if (triggerLatitude == null || triggerLongitude == null) {
+            _uiState.update {
+                it.copy(validationError = "Pick the trigger location on the map")
             }
             return
         }
@@ -241,11 +230,10 @@ class WatcherEditViewModel(
             val watcher = Watcher(
                 id = editedWatcher?.id ?: 0L,
                 name = state.name.trim(),
-                origin = origin,
+                icon = state.icon,
                 destination = destination,
-                triggerType = state.triggerType,
-                triggerLatitude = state.triggerLatitude ?: origin.latitude,
-                triggerLongitude = state.triggerLongitude ?: origin.longitude,
+                triggerLatitude = triggerLatitude,
+                triggerLongitude = triggerLongitude,
                 triggerRadiusMeters = state.triggerRadiusMeters,
                 activeDays = state.activeDays,
                 windowStartMinutes = state.windowStartMinutes,

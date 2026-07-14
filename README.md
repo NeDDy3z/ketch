@@ -25,8 +25,10 @@ with the arrival time. Walking segments are always excluded.
 
 ## Features
 
-- Watchers with start stop, destination stop, active days, and a daily time window
-- Two trigger types: leaving a location (geofence exit) or a fixed time
+- Watchers with a destination stop, active days, and a daily time window
+- Leave trigger: a geofence exit around a location picked on a map or set to
+  your current position; the route always starts from where you are
+- Per watcher icon picker
 - Optional limits per watcher: maximum transfers and maximum travel time
 - Home screen showing the current fastest connection for each watcher,
   ordered by how close you are to each trigger location
@@ -38,7 +40,8 @@ with the arrival time. Walking segments are always excluded.
 ## Requirements
 
 - Android 10 (API 29) or newer
-- A Google Maps Platform API key with the Routes API and Places API (New) enabled
+- A Google Maps Platform API key with the Routes API, Places API (New), and
+  Maps SDK for Android enabled (the SDK powers the trigger location picker)
 
 ## Setup
 

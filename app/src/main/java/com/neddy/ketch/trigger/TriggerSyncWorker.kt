@@ -6,8 +6,8 @@ import androidx.work.WorkerParameters
 import com.neddy.ketch.appContainer
 
 /**
- * Re-registers geofences and time triggers for all watchers. Runs after boot
- * and after any watcher change.
+ * Re-registers geofences for all watchers. Runs after boot and after any
+ * watcher change.
  */
 class TriggerSyncWorker(
     context: Context,
@@ -18,7 +18,6 @@ class TriggerSyncWorker(
         val container = applicationContext.appContainer
         val watchers = container.watcherRepository.getWatchers()
         container.geofenceManager.sync(watchers)
-        container.timeTriggerScheduler.sync(watchers)
         return Result.success()
     }
 }

@@ -9,29 +9,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -51,9 +53,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.maps.model.LatLng
 import com.neddy.ketch.appContainer
-import com.neddy.ketch.domain.model.TriggerType
+import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.ui.components.MapPickerDialog
 import com.neddy.ketch.ui.components.SkeletonBox
+import com.neddy.ketch.ui.components.watcherIconCatalog
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -69,6 +74,7 @@ fun WatcherEditScreen(
         WatcherEditViewModel(context.appContainer, watcherId)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showMapPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.saved) {
         if (state.saved) onDone()
@@ -125,91 +131,83 @@ fun WatcherEditScreen(
                 value = state.name,
                 onValueChange = viewModel::setName,
                 label = { Text("Name") },
-                placeholder = { Text("Home to work") },
+                placeholder = { Text("Leaving home") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SectionTitle("Route")
-            StopSearchField(
-                label = "Start stop",
-                query = state.originQuery,
-                selected = state.origin != null,
-                active = state.searchField == StopField.ORIGIN,
-                results = state.searchResults,
-                searching = state.searching,
-                error = state.searchError,
-                onQueryChange = { viewModel.setStopQuery(StopField.ORIGIN, it) },
-                onSelect = { viewModel.selectStop(StopField.ORIGIN, it) },
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                IconButton(onClick = viewModel::swapStops) {
-                    Icon(Icons.Filled.SwapVert, contentDescription = "Swap start and destination")
+            SectionTitle("Icon")
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(watcherIconCatalog, key = { it.first }) { (key, image) ->
+                    FilledIconButton(
+                        onClick = { viewModel.setIcon(key) },
+                        colors = if (state.icon == key) {
+                            IconButtonDefaults.filledIconButtonColors()
+                        } else {
+                            IconButtonDefaults.filledTonalIconButtonColors()
+                        },
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(imageVector = image, contentDescription = key)
+                    }
                 }
             }
-            StopSearchField(
-                label = "Destination stop",
+
+            SectionTitle("Destination")
+            DestinationSearchField(
                 query = state.destinationQuery,
                 selected = state.destination != null,
-                active = state.searchField == StopField.DESTINATION,
                 results = state.searchResults,
                 searching = state.searching,
                 error = state.searchError,
-                onQueryChange = { viewModel.setStopQuery(StopField.DESTINATION, it) },
-                onSelect = { viewModel.selectStop(StopField.DESTINATION, it) },
+                onQueryChange = viewModel::setDestinationQuery,
+                onSelect = viewModel::selectDestination,
             )
 
-            SectionTitle("Trigger")
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = state.triggerType == TriggerType.LOCATION_EXIT,
-                    onClick = { viewModel.setTriggerType(TriggerType.LOCATION_EXIT) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                ) {
-                    Text("Leaving location")
-                }
-                SegmentedButton(
-                    selected = state.triggerType == TriggerType.TIME,
-                    onClick = { viewModel.setTriggerType(TriggerType.TIME) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) {
-                    Text("At time")
-                }
-            }
-
-            if (state.triggerType == TriggerType.LOCATION_EXIT) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = state.triggerLatitude?.let { lat ->
-                            "Trigger location: %.5f, %.5f".format(
-                                lat,
-                                state.triggerLongitude ?: 0.0,
-                            )
-                        } ?: "Trigger location: start stop position",
-                        style = MaterialTheme.typography.bodyMedium,
+            SectionTitle("Trigger location")
+            Text(
+                text = "Ketch fires when you leave this place. The route then starts " +
+                    "from wherever you are.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = if (state.hasTriggerLocation) {
+                    "Trigger location: %.5f, %.5f".format(
+                        state.triggerLatitude,
+                        state.triggerLongitude,
                     )
-                    OutlinedButton(onClick = viewModel::useCurrentLocationAsTrigger) {
-                        Icon(Icons.Filled.MyLocation, contentDescription = null)
-                        Text(
-                            text = "Use current location",
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
-                    }
+                } else {
+                    "No trigger location set yet"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { showMapPicker = true }) {
+                    Icon(Icons.Filled.Map, contentDescription = null)
                     Text(
-                        text = "Leave radius: ${state.triggerRadiusMeters} m",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Pick on map",
+                        modifier = Modifier.padding(start = 8.dp),
                     )
-                    Slider(
-                        value = state.triggerRadiusMeters.toFloat(),
-                        onValueChange = { viewModel.setTriggerRadius(it.toInt()) },
-                        valueRange = 100f..1000f,
-                        steps = 8,
+                }
+                OutlinedButton(onClick = viewModel::useCurrentLocationAsTrigger) {
+                    Icon(Icons.Filled.MyLocation, contentDescription = null)
+                    Text(
+                        text = "Current location",
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
             }
+            Text(
+                text = "Leave radius: ${state.triggerRadiusMeters} m",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Slider(
+                value = state.triggerRadiusMeters.toFloat(),
+                onValueChange = { viewModel.setTriggerRadius(it.toInt()) },
+                valueRange = 100f..1000f,
+                steps = 8,
+            )
 
             SectionTitle("Active days")
             Row(
@@ -300,6 +298,22 @@ fun WatcherEditScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+
+    if (showMapPicker) {
+        MapPickerDialog(
+            title = "Trigger location",
+            initial = if (state.hasTriggerLocation) {
+                LatLng(state.triggerLatitude ?: 0.0, state.triggerLongitude ?: 0.0)
+            } else {
+                null
+            },
+            onDismiss = { showMapPicker = false },
+            onPick = { latLng ->
+                viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
+                showMapPicker = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -312,32 +326,29 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun StopSearchField(
-    label: String,
+private fun DestinationSearchField(
     query: String,
     selected: Boolean,
-    active: Boolean,
-    results: List<com.neddy.ketch.domain.model.StopPlace>,
+    results: List<StopPlace>,
     searching: Boolean,
     error: String?,
     onQueryChange: (String) -> Unit,
-    onSelect: (com.neddy.ketch.domain.model.StopPlace) -> Unit,
+    onSelect: (StopPlace) -> Unit,
 ) {
     Column {
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            label = { Text(label) },
+            label = { Text("Destination stop") },
             placeholder = { Text("Search stops") },
             singleLine = true,
-            isError = query.isNotBlank() && !selected && !active,
             supportingText = {
-                if (query.isNotBlank() && !selected && !active) {
+                if (query.isNotBlank() && !selected && results.isEmpty() && !searching) {
                     Text("Pick a stop from the search results")
                 }
             },
             trailingIcon = {
-                if (active && searching) {
+                if (searching) {
                     CircularProgressIndicator(
                         modifier = Modifier
                             .width(20.dp)
@@ -348,7 +359,7 @@ private fun StopSearchField(
             },
             modifier = Modifier.fillMaxWidth(),
         )
-        if (active && error != null) {
+        if (error != null) {
             Text(
                 text = error,
                 color = MaterialTheme.colorScheme.error,
@@ -356,7 +367,7 @@ private fun StopSearchField(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        if (active && results.isNotEmpty()) {
+        if (results.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 results.take(6).forEach { stop ->
                     ListItem(

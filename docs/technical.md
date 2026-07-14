@@ -64,9 +64,11 @@ the same interface.
 
 ## Domain layer
 
-- `Watcher` models one configured commute, including trigger data, active
-  days, time window, and optional limits. `Watcher.isActiveAt` implements the
-  day and window check used by both triggers.
+- `Watcher` models one configured commute, including the icon key, trigger
+  location, active days, time window, and optional limits.
+  `Watcher.isActiveAt` implements the day and window check applied when a
+  trigger fires. Routes have no configured start; they begin at the current
+  device position.
 - `TransitConnection` and `TransitLeg` model a connection as transit
   boardings only. Transfers and total duration are derived properties.
 - `ConnectionSelector.selectBest` filters connections by the optional limits
@@ -78,17 +80,14 @@ the same interface.
 
 ### Location trigger
 
+All watchers are location triggered. The trigger location is picked on a map
+(Maps SDK for Android via maps-compose) or set to the current position.
+
 - `GeofenceManager.sync` replaces all registered geofences with one EXIT
-  geofence per enabled `LOCATION_EXIT` watcher (request id `watcher_{id}`).
-  Registration is skipped without background location permission.
+  geofence per enabled watcher (request id `watcher_{id}`). Registration is
+  skipped without background location permission.
 - `GeofenceBroadcastReceiver` receives exit transitions and enqueues a
   `ConnectionLookupWorker` per affected watcher.
-
-### Time trigger
-
-- `TimeTriggerScheduler` computes the next window start on an active day and
-  enqueues a unique delayed `ConnectionLookupWorker` for it. After the worker
-  runs it reschedules the next occurrence.
 
 ### Lookup worker
 
@@ -98,16 +97,18 @@ the same interface.
    the day/time window.
 2. Applies a 30 minute cooldown based on `lastTriggeredAt` to prevent
    duplicate notifications.
-3. Fetches connections, selects the best one, formats it, and posts a high
+3. Resolves the route origin from the current device position, falling back
+   to the trigger location when no fix is available.
+4. Fetches connections, selects the best one, formats it, and posts a high
    priority notification via `NotificationHelper`.
-4. Marks the watcher as triggered. Network failures retry up to 3 times.
+5. Marks the watcher as triggered. Network failures retry up to 3 times.
 
 ### Resilience
 
 - `BootCompletedReceiver` enqueues `TriggerSyncWorker` after reboot because
   neither geofences nor scheduled work survive one.
-- `TriggerSyncWorker` re-syncs geofences and time triggers from the database.
-  It also runs after every watcher create, update, delete, or toggle.
+- `TriggerSyncWorker` re-syncs geofences from the database. It also runs
+  after every watcher create, update, delete, or toggle.
 
 ## UI layer
 
@@ -120,10 +121,12 @@ the same interface.
   loading.
 - Watchers (`WatchersScreen`, `WatchersViewModel`): observable list with
   enable switch, delete confirmation dialog, and a FAB to add a watcher.
-- Editor (`WatcherEditScreen`, `WatcherEditViewModel`): debounced stop search
-  (400 ms, minimum 3 characters), swap button, segmented trigger type
-  selector, day chips, Material 3 time pickers, limit fields, and a
-  notifications toggle. Validation errors are shown inline.
+- Editor (`WatcherEditScreen`, `WatcherEditViewModel`): icon picker,
+  debounced destination search (400 ms, minimum 3 characters), full screen
+  map picker dialog for the trigger location, day chips, Material 3 time
+  pickers, limit fields, and a notifications toggle. Search and lookup
+  failures are translated to actionable messages by `userMessageFor`.
+  Validation errors are shown inline.
 - Settings (`SettingsScreen`, `SettingsViewModel`): theme selector, API key
   field, and new watcher defaults.
 - Theming: dynamic color on Android 12+, otherwise a teal and amber fallback
@@ -154,8 +157,6 @@ Unit tests cover the pure logic:
 
 - `ConnectionFormatterTest` verifies the notification line format.
 - `ConnectionSelectorTest` verifies best connection selection and limits.
-- `TimeTriggerSchedulerTest` verifies next occurrence computation across
-  days and week wrap around.
 
 Run with `./gradlew test`.
 

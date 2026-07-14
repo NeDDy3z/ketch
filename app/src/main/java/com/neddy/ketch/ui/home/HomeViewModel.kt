@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
+import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
+import com.neddy.ketch.ui.components.userMessageFor
 import java.time.Instant
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -61,7 +63,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             val ordered = orderByProximity(watchers, location)
 
             val results = ordered.map { watcher ->
-                async { lookup(watcher) }
+                async { lookup(watcher, location) }
             }.awaitAll()
 
             _uiState.value = HomeUiState(
@@ -72,9 +74,18 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun lookup(watcher: Watcher): WatcherConnection = try {
+    /**
+     * Routes start at the current device position; without a fix, the
+     * watcher trigger location stands in for it.
+     */
+    private suspend fun lookup(watcher: Watcher, location: Location?): WatcherConnection = try {
+        val origin = StopPlace(
+            name = "Current location",
+            latitude = location?.latitude ?: watcher.triggerLatitude,
+            longitude = location?.longitude ?: watcher.triggerLongitude,
+        )
         val connections = container.transitRepository.findConnections(
-            origin = watcher.origin,
+            origin = origin,
             destination = watcher.destination,
             departureTime = Instant.now(),
         )
@@ -86,13 +97,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         WatcherConnection(
             watcher = watcher,
             connection = best,
-            error = if (best == null) "No connection found" else null,
+            error = if (best == null) {
+                "No connection found right now. Try adjusting the limits."
+            } else {
+                null
+            },
         )
     } catch (e: Exception) {
         WatcherConnection(
             watcher = watcher,
             connection = null,
-            error = e.message ?: "Lookup failed",
+            error = userMessageFor(e),
         )
     }
 

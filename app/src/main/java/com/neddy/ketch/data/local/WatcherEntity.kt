@@ -3,7 +3,6 @@ package com.neddy.ketch.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.neddy.ketch.domain.model.StopPlace
-import com.neddy.ketch.domain.model.TriggerType
 import com.neddy.ketch.domain.model.Watcher
 import java.time.DayOfWeek
 
@@ -11,13 +10,10 @@ import java.time.DayOfWeek
 data class WatcherEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
-    val originName: String,
-    val originLatitude: Double,
-    val originLongitude: Double,
+    val icon: String,
     val destinationName: String,
     val destinationLatitude: Double,
     val destinationLongitude: Double,
-    val triggerType: String,
     val triggerLatitude: Double,
     val triggerLongitude: Double,
     val triggerRadiusMeters: Int,
@@ -35,9 +31,8 @@ data class WatcherEntity(
 fun WatcherEntity.toDomain(): Watcher = Watcher(
     id = id,
     name = name,
-    origin = StopPlace(originName, originLatitude, originLongitude),
+    icon = icon,
     destination = StopPlace(destinationName, destinationLatitude, destinationLongitude),
-    triggerType = TriggerType.valueOf(triggerType),
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,
@@ -57,13 +52,10 @@ fun WatcherEntity.toDomain(): Watcher = Watcher(
 fun Watcher.toEntity(): WatcherEntity = WatcherEntity(
     id = id,
     name = name,
-    originName = origin.name,
-    originLatitude = origin.latitude,
-    originLongitude = origin.longitude,
+    icon = icon,
     destinationName = destination.name,
     destinationLatitude = destination.latitude,
     destinationLongitude = destination.longitude,
-    triggerType = triggerType.name,
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,
