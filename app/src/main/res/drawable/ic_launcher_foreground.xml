@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Front view of a train, drawn inside the adaptive icon safe zone.
+    Windshield and headlights are cut out with the even-odd fill rule so the
+    icon also works as a Material You monochrome (themed) icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="108dp"
+        android:height="108dp"
+        android:viewportWidth="108"
+        android:viewportHeight="108">
+    <!-- Train body with windshield and headlight cutouts -->
+    <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M44,28
+                L64,28
+                A10,10 0 0 1 74,38
+                L74,68
+                A8,8 0 0 1 66,76
+                L42,76
+                A8,8 0 0 1 34,68
+                L34,38
+                A10,10 0 0 1 44,28
+                Z
+                M43,36
+                L65,36
+                A3,3 0 0 1 68,39
+                L68,49
+                A3,3 0 0 1 65,52
+                L43,52
+                A3,3 0 0 1 40,49
+                L40,39
+                A3,3 0 0 1 43,36
+                Z
+                M44,64
+                A3.5,3.5 0 1 0 44,71
+                A3.5,3.5 0 1 0 44,64
+                Z
+                M64,64
+                A3.5,3.5 0 1 0 64,71
+                A3.5,3.5 0 1 0 64,64
+                Z" />
+    <!-- Pantograph hint on the roof -->
+    <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M50,23h8v3h-8z" />
+    <!-- Bumper -->
+    <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M38,79
+                L70,79
+                L70,82
+                A2,2 0 0 1 68,84
+                L40,84
+                A2,2 0 0 1 38,82
+                Z" />
+    <!-- Track -->
+    <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M32,87h44v3h-44z" />
+</vector>
