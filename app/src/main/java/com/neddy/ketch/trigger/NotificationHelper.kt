@@ -36,9 +36,10 @@ class NotificationHelper(private val context: Context) {
 
     /**
      * Posts the connection notification for [watcher]. The [connectionLine]
-     * follows the "stop (line) time - ... - stop time" format.
+     * follows the "stop (line) time - ... - stop time" format and is shown
+     * collapsed; [expandedText] carries the same stops on separate lines.
      */
-    fun notifyConnection(watcher: Watcher, connectionLine: String) {
+    fun notifyConnection(watcher: Watcher, connectionLine: String, expandedText: String) {
         if (!hasPermission()) return
 
         val contentIntent = PendingIntent.getActivity(
@@ -52,7 +53,7 @@ class NotificationHelper(private val context: Context) {
             .setSmallIcon(R.drawable.ic_train)
             .setContentTitle(watcher.name)
             .setContentText(connectionLine)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(connectionLine))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setAutoCancel(true)

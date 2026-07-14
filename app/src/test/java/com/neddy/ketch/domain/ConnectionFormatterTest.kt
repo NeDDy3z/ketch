@@ -54,6 +54,33 @@ class ConnectionFormatterTest {
     }
 
     @Test
+    fun `formats connection with each stop on its own line`() {
+        val connection = TransitConnection(
+            legs = listOf(
+                leg(
+                    "R41",
+                    "Praha hl.n.",
+                    "2026-07-14T14:00:00Z",
+                    "Cesky Brod",
+                    "2026-07-14T14:28:00Z",
+                ),
+                leg(
+                    "660",
+                    "Cesky Brod",
+                    "2026-07-14T14:30:00Z",
+                    "Kostelec n.C. lesy",
+                    "2026-07-14T15:00:00Z",
+                ),
+            ),
+        )
+
+        assertEquals(
+            "Praha hl.n. (R41) 16:00\nCesky Brod (660) 16:30\nKostelec n.C. lesy 17:00",
+            ConnectionFormatter.formatMultiline(connection, zone),
+        )
+    }
+
+    @Test
     fun `formats direct connection`() {
         val connection = TransitConnection(
             legs = listOf(

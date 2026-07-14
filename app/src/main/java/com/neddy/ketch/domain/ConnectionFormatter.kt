@@ -18,12 +18,28 @@ object ConnectionFormatter {
 
     private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-    fun format(connection: TransitConnection, zoneId: ZoneId = ZoneId.systemDefault()): String {
-        val boardings = connection.legs.joinToString(" - ") { leg ->
+    fun format(connection: TransitConnection, zoneId: ZoneId = ZoneId.systemDefault()): String =
+        format(connection, zoneId, separator = " - ")
+
+    /**
+     * Same content with every stop on its own line, used for the expanded
+     * notification where a single long line is hard to scan.
+     */
+    fun formatMultiline(
+        connection: TransitConnection,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): String = format(connection, zoneId, separator = "\n")
+
+    private fun format(
+        connection: TransitConnection,
+        zoneId: ZoneId,
+        separator: String,
+    ): String {
+        val boardings = connection.legs.joinToString(separator) { leg ->
             "${leg.departureStop} (${leg.lineCode}) ${time(leg.departureTime, zoneId)}"
         }
         val last = connection.legs.last()
-        return "$boardings - ${last.arrivalStop} ${time(last.arrivalTime, zoneId)}"
+        return "$boardings$separator${last.arrivalStop} ${time(last.arrivalTime, zoneId)}"
     }
 
     private fun time(instant: Instant, zoneId: ZoneId): String =
