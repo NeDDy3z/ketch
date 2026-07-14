@@ -300,12 +300,20 @@ fun WatcherEditScreen(
     }
 
     if (showMapPicker) {
+        val hasLocationPermission = context.checkSelfPermission(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         MapPickerDialog(
             title = "Trigger location",
             initial = if (state.hasTriggerLocation) {
                 LatLng(state.triggerLatitude ?: 0.0, state.triggerLongitude ?: 0.0)
             } else {
                 null
+            },
+            radiusMeters = state.triggerRadiusMeters,
+            myLocationEnabled = hasLocationPermission,
+            currentLocation = {
+                viewModel.currentLocation()?.let { (lat, lng) -> LatLng(lat, lng) }
             },
             onDismiss = { showMapPicker = false },
             onPick = { latLng ->

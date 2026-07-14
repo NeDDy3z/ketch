@@ -181,6 +181,10 @@ class WatcherEditViewModel(
         }
     }
 
+    /** Current device position for the map picker, null without a fix. */
+    suspend fun currentLocation(): Pair<Double, Double>? =
+        container.locationProvider.currentLocation()?.let { it.latitude to it.longitude }
+
     fun toggleDay(day: DayOfWeek) {
         _uiState.update {
             val days = if (day in it.activeDays) it.activeDays - day else it.activeDays + day
