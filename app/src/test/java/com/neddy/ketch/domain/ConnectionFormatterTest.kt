@@ -62,9 +62,9 @@ class ConnectionFormatterTest {
     )
 
     @Test
-    fun `title is the first boarding with vehicle emoji`() {
+    fun `title is time then stop then line then emoji`() {
         assertEquals(
-            "🚆 Praha hl.n. (R41) 16:00",
+            "16:00 Praha hl.n. (R41) 🚆",
             ConnectionFormatter.notificationTitle(withTransfer, zone),
         )
     }
@@ -72,7 +72,7 @@ class ConnectionFormatterTest {
     @Test
     fun `text continues after the first boarding on one line`() {
         assertEquals(
-            "🚌 Cesky Brod (660) 16:30 - Kostelec n.C. lesy 17:00",
+            "16:30 Cesky Brod (660) 🚌 - 17:00 Kostelec n.C. lesy",
             ConnectionFormatter.notificationText(withTransfer, zone),
         )
     }
@@ -80,7 +80,7 @@ class ConnectionFormatterTest {
     @Test
     fun `big text continues after the first boarding on separate lines`() {
         assertEquals(
-            "🚌 Cesky Brod (660) 16:30\nKostelec n.C. lesy 17:00",
+            "16:30 Cesky Brod (660) 🚌\n17:00 Kostelec n.C. lesy",
             ConnectionFormatter.notificationBigText(withTransfer, zone),
         )
     }
@@ -88,12 +88,45 @@ class ConnectionFormatterTest {
     @Test
     fun `direct connection body is just the arrival`() {
         assertEquals(
-            "🚆 Praha hl.n. (S1) 16:00",
+            "16:00 Praha hl.n. (S1) 🚆",
             ConnectionFormatter.notificationTitle(direct, zone),
         )
         assertEquals(
-            "Kolin 16:45",
+            "16:45 Kolin",
             ConnectionFormatter.notificationBigText(direct, zone),
+        )
+    }
+
+    @Test
+    fun `verbose stop names are shortened`() {
+        val connection = TransitConnection(
+            legs = listOf(
+                leg(
+                    "S7",
+                    "Hlavní nádraží",
+                    "2026-07-14T14:00:00Z",
+                    "Masarykovo nádraží",
+                    "2026-07-14T14:10:00Z",
+                    vehicleType = "COMMUTER_TRAIN",
+                ),
+                leg(
+                    "381",
+                    "I. P. Pavlova",
+                    "2026-07-14T14:20:00Z",
+                    "Kostelec n.Č.L.,Nám.",
+                    "2026-07-14T15:00:00Z",
+                    vehicleType = "BUS",
+                ),
+            ),
+        )
+
+        assertEquals(
+            "16:00 Praha hl.n. (S7) 🚆",
+            ConnectionFormatter.notificationTitle(connection, zone),
+        )
+        assertEquals(
+            "16:20 I.P. Pavlova (381) 🚌\n17:00 K.n.Č.l, nám.",
+            ConnectionFormatter.notificationBigText(connection, zone),
         )
     }
 }
