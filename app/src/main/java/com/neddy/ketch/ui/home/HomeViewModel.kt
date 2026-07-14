@@ -12,9 +12,13 @@ import com.neddy.ketch.ui.components.userMessageFor
 import java.time.Instant
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class WatcherConnection(
@@ -36,17 +40,29 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        refresh()
+        // Follow the database so creating, editing, toggling, or deleting a
+        // watcher updates the home screen without a manual refresh.
+        viewModelScope.launch {
+            container.watcherRepository.observeWatchers()
+                .map { list -> list.filter { it.enabled } }
+                .distinctUntilChanged()
+                .collectLatest { watchers -> load(watchers) }
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
+            load(container.watcherRepository.getWatchers().filter { it.enabled })
+        }
+    }
+
+    private suspend fun load(watchers: List<Watcher>) {
+        coroutineScope {
             _uiState.value = _uiState.value.copy(loading = true)
 
-            val watchers = container.watcherRepository.getWatchers().filter { it.enabled }
             if (watchers.isEmpty()) {
                 _uiState.value = HomeUiState(loading = false, hasWatchers = false)
-                return@launch
+                return@coroutineScope
             }
 
             val apiKey = container.settingsRepository.current().apiKey
@@ -56,7 +72,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                     hasWatchers = true,
                     missingApiKey = true,
                 )
-                return@launch
+                return@coroutineScope
             }
 
             val location = container.locationProvider.currentLocation()
