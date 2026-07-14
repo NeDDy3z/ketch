@@ -15,6 +15,25 @@ data class SearchTextResponse(
 )
 
 @Serializable
+data class SearchNearbyRequest(
+    val includedTypes: List<String> = listOf("transit_station"),
+    val maxResultCount: Int = 1,
+    val rankPreference: String = "DISTANCE",
+    val locationRestriction: LocationRestrictionDto,
+)
+
+@Serializable
+data class LocationRestrictionDto(
+    val circle: CircleDto,
+)
+
+@Serializable
+data class CircleDto(
+    val center: LatLngDto,
+    val radius: Double,
+)
+
+@Serializable
 data class PlaceDto(
     val displayName: LocalizedTextDto? = null,
     val formattedAddress: String? = null,

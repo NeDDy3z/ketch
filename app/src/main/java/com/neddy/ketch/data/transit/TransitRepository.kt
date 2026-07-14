@@ -25,4 +25,10 @@ interface TransitRepository {
      * Searches public transport stops matching the free text [query].
      */
     suspend fun searchStops(query: String): List<StopPlace>
+
+    /**
+     * Returns the transit stop closest to the coordinates, or null when no
+     * stop exists within a reasonable walking distance.
+     */
+    suspend fun nearestStop(latitude: Double, longitude: Double): StopPlace?
 }

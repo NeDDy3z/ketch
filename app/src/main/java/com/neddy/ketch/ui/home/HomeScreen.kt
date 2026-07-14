@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,7 +55,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ketch") },
+                title = { Text("Ketch", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
@@ -97,7 +98,9 @@ fun HomeScreen(
                     items(state.watcherConnections.size) { index ->
                         val item = state.watcherConnections[index]
                         val connection = item.connection
-                        if (connection != null) {
+                        if (item.loading) {
+                            ConnectionCardSkeleton()
+                        } else if (connection != null) {
                             ConnectionCard(
                                 title = item.watcher.name,
                                 connection = connection,

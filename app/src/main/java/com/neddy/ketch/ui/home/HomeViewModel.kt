@@ -10,8 +10,6 @@ import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
 import java.time.Instant
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,12 +17,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class WatcherConnection(
     val watcher: Watcher,
     val connection: TransitConnection?,
     val error: String?,
+    val loading: Boolean = false,
 )
 
 data class HomeUiState(
@@ -75,18 +75,28 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 return@coroutineScope
             }
 
-            val location = container.locationProvider.currentLocation()
+            val location = container.locationProvider.quickLocation()
             val ordered = orderByProximity(watchers, location)
 
-            val results = ordered.map { watcher ->
-                async { lookup(watcher, location) }
-            }.awaitAll()
-
+            // Show one skeleton card per watcher right away and fill each in
+            // as its lookup finishes, instead of waiting for the slowest.
             _uiState.value = HomeUiState(
                 loading = false,
-                watcherConnections = results,
                 hasWatchers = true,
+                watcherConnections = ordered.map {
+                    WatcherConnection(it, connection = null, error = null, loading = true)
+                },
             )
+            ordered.forEachIndexed { index, watcher ->
+                launch {
+                    val result = lookup(watcher, location)
+                    _uiState.update { state ->
+                        val connections = state.watcherConnections.toMutableList()
+                        if (index < connections.size) connections[index] = result
+                        state.copy(watcherConnections = connections)
+                    }
+                }
+            }
         }
     }
 

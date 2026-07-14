@@ -51,6 +51,28 @@ class GoogleTransitRepository(
         }
     }
 
+    override suspend fun nearestStop(latitude: Double, longitude: Double): StopPlace? {
+        val response = placesApi.searchNearby(
+            apiKey = apiKey(),
+            request = SearchNearbyRequest(
+                locationRestriction = LocationRestrictionDto(
+                    circle = CircleDto(
+                        center = LatLngDto(latitude, longitude),
+                        radius = NEAREST_STOP_RADIUS_METERS,
+                    ),
+                ),
+            ),
+        )
+        val place = response.places.firstOrNull() ?: return null
+        val name = place.displayName?.text ?: return null
+        val location = place.location ?: return null
+        return StopPlace(
+            name = name,
+            latitude = location.latitude,
+            longitude = location.longitude,
+        )
+    }
+
     private suspend fun apiKey(): String {
         val key = settingsRepository.current().apiKey
         if (key.isBlank()) throw MissingApiKeyException()
@@ -91,4 +113,8 @@ class GoogleTransitRepository(
 
     private fun parseInstant(value: String): Instant? =
         runCatching { Instant.parse(value) }.getOrNull()
+
+    companion object {
+        private const val NEAREST_STOP_RADIUS_METERS = 500.0
+    }
 }

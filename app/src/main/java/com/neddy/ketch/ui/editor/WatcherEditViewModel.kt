@@ -174,16 +174,34 @@ class WatcherEditViewModel(
     fun setTriggerRadius(meters: Int) =
         _uiState.update { it.copy(triggerRadiusMeters = meters) }
 
-    fun useCurrentLocationAsTrigger() {
+    /** Precise device position for the map picker, null without a fix. */
+    suspend fun currentLocation(): Pair<Double, Double>? =
+        container.locationProvider.currentLocation(precise = true)
+            ?.let { it.latitude to it.longitude }
+
+    /**
+     * Resolves a map pick to the nearest transit stop and uses it as the
+     * destination. Falls back to the raw coordinates when no stop is close.
+     */
+    fun pickDestinationOnMap(latitude: Double, longitude: Double) {
         viewModelScope.launch {
-            val location = container.locationProvider.currentLocation() ?: return@launch
-            setTriggerLocation(location.latitude, location.longitude)
+            _uiState.update { it.copy(searching = true, searchError = null) }
+            val stop = try {
+                container.transitRepository.nearestStop(latitude, longitude)
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(searching = false, searchError = userMessageFor(e))
+                }
+                return@launch
+            } ?: StopPlace(
+                name = "Dropped pin (%.5f, %.5f)".format(latitude, longitude),
+                latitude = latitude,
+                longitude = longitude,
+            )
+            _uiState.update { it.copy(searching = false) }
+            selectDestination(stop)
         }
     }
-
-    /** Current device position for the map picker, null without a fix. */
-    suspend fun currentLocation(): Pair<Double, Double>? =
-        container.locationProvider.currentLocation()?.let { it.latitude to it.longitude }
 
     fun toggleDay(day: DayOfWeek) {
         _uiState.update {

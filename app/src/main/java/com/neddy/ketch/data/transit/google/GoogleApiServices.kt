@@ -32,4 +32,12 @@ interface PlacesApiService {
             "places.displayName,places.formattedAddress,places.location",
         @Body request: SearchTextRequest,
     ): SearchTextResponse
+
+    @POST("v1/places:searchNearby")
+    suspend fun searchNearby(
+        @Header("X-Goog-Api-Key") apiKey: String,
+        @Header("X-Goog-FieldMask") fieldMask: String =
+            "places.displayName,places.location",
+        @Body request: SearchNearbyRequest,
+    ): SearchTextResponse
 }

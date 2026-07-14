@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,7 +73,7 @@ fun WatcherEditScreen(
         WatcherEditViewModel(context.appContainer, watcherId)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var showMapPicker by remember { mutableStateOf(false) }
+    var mapPickerTarget by remember { mutableStateOf<MapPickerTarget?>(null) }
 
     LaunchedEffect(state.saved) {
         if (state.saved) onDone()
@@ -163,6 +162,13 @@ fun WatcherEditScreen(
                 onQueryChange = viewModel::setDestinationQuery,
                 onSelect = viewModel::selectDestination,
             )
+            OutlinedButton(onClick = { mapPickerTarget = MapPickerTarget.DESTINATION }) {
+                Icon(Icons.Filled.Map, contentDescription = null)
+                Text(
+                    text = "Pick on map",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
 
             SectionTitle("Trigger location")
             Text(
@@ -182,21 +188,12 @@ fun WatcherEditScreen(
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showMapPicker = true }) {
-                    Icon(Icons.Filled.Map, contentDescription = null)
-                    Text(
-                        text = "Pick on map",
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                OutlinedButton(onClick = viewModel::useCurrentLocationAsTrigger) {
-                    Icon(Icons.Filled.MyLocation, contentDescription = null)
-                    Text(
-                        text = "Current location",
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
+            OutlinedButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
+                Icon(Icons.Filled.Map, contentDescription = null)
+                Text(
+                    text = "Pick on map",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             Text(
                 text = "Leave radius: ${state.triggerRadiusMeters} m",
@@ -299,30 +296,43 @@ fun WatcherEditScreen(
         }
     }
 
-    if (showMapPicker) {
+    mapPickerTarget?.let { target ->
         val hasLocationPermission = context.checkSelfPermission(
             android.Manifest.permission.ACCESS_FINE_LOCATION,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val isTrigger = target == MapPickerTarget.TRIGGER
         MapPickerDialog(
-            title = "Trigger location",
-            initial = if (state.hasTriggerLocation) {
-                LatLng(state.triggerLatitude ?: 0.0, state.triggerLongitude ?: 0.0)
-            } else {
-                null
+            title = if (isTrigger) "Trigger location" else "Destination",
+            initial = when {
+                isTrigger && state.hasTriggerLocation -> LatLng(
+                    state.triggerLatitude ?: 0.0,
+                    state.triggerLongitude ?: 0.0,
+                )
+                !isTrigger && state.destination != null -> LatLng(
+                    state.destination?.latitude ?: 0.0,
+                    state.destination?.longitude ?: 0.0,
+                )
+                else -> null
             },
-            radiusMeters = state.triggerRadiusMeters,
+            radiusMeters = if (isTrigger) state.triggerRadiusMeters else null,
             myLocationEnabled = hasLocationPermission,
             currentLocation = {
                 viewModel.currentLocation()?.let { (lat, lng) -> LatLng(lat, lng) }
             },
-            onDismiss = { showMapPicker = false },
+            onDismiss = { mapPickerTarget = null },
             onPick = { latLng ->
-                viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
-                showMapPicker = false
+                if (isTrigger) {
+                    viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
+                } else {
+                    viewModel.pickDestinationOnMap(latLng.latitude, latLng.longitude)
+                }
+                mapPickerTarget = null
             },
         )
     }
 }
+
+private enum class MapPickerTarget { TRIGGER, DESTINATION }
 
 @Composable
 private fun SectionTitle(text: String) {
