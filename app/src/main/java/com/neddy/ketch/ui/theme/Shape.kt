@@ -5,21 +5,20 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 /**
- * A rounded, expressive shape scale. Everything in the app reads as rounded so
- * inputs, chips, cards and buttons live in the same visual family — no square
- * corners next to pill shaped controls.
+ * One rounded shape family from the M3 redesign (docs/design_document.md):
+ * chips and badges are full pills, everything else shares this scale.
  *
- * Component mapping (Material 3 defaults):
- *  - extraSmall -> text fields, menus, snackbars
- *  - small      -> chips
- *  - medium     -> cards
- *  - large      -> FABs, navigation drawer
- *  - extraLarge -> dialogs, bottom sheets, map preview
+ * Component mapping:
+ *  - extraSmall -> icon tiles, small inner panels (14dp)
+ *  - small      -> filled fields, inner info panels (16dp)
+ *  - medium     -> grouped-row containers, buttons (20dp)
+ *  - large      -> cards (26dp)
+ *  - extraLarge -> sheets, dialogs, hero tiles (32dp)
  */
 val KetchShapes = Shapes(
-    extraSmall = RoundedCornerShape(16.dp),
-    small = RoundedCornerShape(18.dp),
-    medium = RoundedCornerShape(24.dp),
-    large = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(14.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
     extraLarge = RoundedCornerShape(32.dp),
 )

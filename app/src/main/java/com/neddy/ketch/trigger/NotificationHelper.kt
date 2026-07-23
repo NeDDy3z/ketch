@@ -52,6 +52,10 @@ class NotificationHelper(private val context: Context) {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_CONNECTIONS)
             .setSmallIcon(R.drawable.ic_train)
+            // Brand primary from the Ketch M3 palette (docs/design_document.md):
+            // tints the small icon and accents in the notification chrome.
+            .setColor(0xFF8A5100.toInt())
+            .setColorized(false)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))

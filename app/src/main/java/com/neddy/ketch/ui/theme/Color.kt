@@ -1,13 +1,84 @@
 package com.neddy.ketch.ui.theme
 
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-// Fallback palette for devices without dynamic color (below Android 12).
-// A calm rail inspired teal and signal amber.
-val TealPrimaryLight = Color(0xFF00696E)
-val TealSecondaryLight = Color(0xFF4A6365)
-val AmberTertiaryLight = Color(0xFF8A5100)
+// Warm amber "departure board" tonal scheme from the Ketch M3 redesign.
+// Values mirror the [data-theme] token blocks in docs/design_document.md.
 
-val TealPrimaryDark = Color(0xFF4DD9E0)
-val TealSecondaryDark = Color(0xFFB1CBCE)
-val AmberTertiaryDark = Color(0xFFFFB870)
+val LightColors = lightColorScheme(
+    primary = Color(0xFF8A5100),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFFDCBE),
+    onPrimaryContainer = Color(0xFF2C1600),
+    secondary = Color(0xFF755846),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFDCBE),
+    onSecondaryContainer = Color(0xFF2A1707),
+    tertiary = Color(0xFF59633A),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFDDE8B4),
+    onTertiaryContainer = Color(0xFF171F02),
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = Color(0xFFFFF8F4),
+    onBackground = Color(0xFF211A14),
+    surface = Color(0xFFFFF8F4),
+    onSurface = Color(0xFF211A14),
+    surfaceVariant = Color(0xFFF2DFD1),
+    onSurfaceVariant = Color(0xFF51443B),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFEF1E8),
+    surfaceContainer = Color(0xFFFBEBDF),
+    surfaceContainerHigh = Color(0xFFF5E5DA),
+    surfaceContainerHighest = Color(0xFFEFE0D4),
+    surfaceDim = Color(0xFFE5D8CD),
+    surfaceBright = Color(0xFFFFF8F4),
+    outline = Color(0xFF84766A),
+    outlineVariant = Color(0xFFD6C5B6),
+    inverseSurface = Color(0xFF372F27),
+    inverseOnSurface = Color(0xFFFDEEE2),
+    inversePrimary = Color(0xFFFFB868),
+    scrim = Color(0xFF1C1610),
+)
+
+val DarkColors = darkColorScheme(
+    primary = Color(0xFFFFB868),
+    onPrimary = Color(0xFF4A2800),
+    primaryContainer = Color(0xFF693C00),
+    onPrimaryContainer = Color(0xFFFFDCBE),
+    secondary = Color(0xFFE4BFA6),
+    onSecondary = Color(0xFF432B1B),
+    secondaryContainer = Color(0xFF5B4130),
+    onSecondaryContainer = Color(0xFFFFDCBE),
+    tertiary = Color(0xFFC1CC9A),
+    onTertiary = Color(0xFF2B3410),
+    tertiaryContainer = Color(0xFF414B24),
+    onTertiaryContainer = Color(0xFFDDE8B4),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = Color(0xFF19120C),
+    onBackground = Color(0xFFEEE0D4),
+    surface = Color(0xFF19120C),
+    onSurface = Color(0xFFEEE0D4),
+    surfaceVariant = Color(0xFF51443B),
+    onSurfaceVariant = Color(0xFFD6C5B6),
+    surfaceContainerLowest = Color(0xFF130D07),
+    surfaceContainerLow = Color(0xFF211A13),
+    surfaceContainer = Color(0xFF251E17),
+    surfaceContainerHigh = Color(0xFF302821),
+    surfaceContainerHighest = Color(0xFF3B322B),
+    surfaceDim = Color(0xFF19120C),
+    surfaceBright = Color(0xFF413830),
+    outline = Color(0xFF9F8F80),
+    outlineVariant = Color(0xFF51443B),
+    inverseSurface = Color(0xFFEEE0D4),
+    inverseOnSurface = Color(0xFF372F27),
+    inversePrimary = Color(0xFF8A5100),
+    scrim = Color(0xFF000000),
+)
