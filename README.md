@@ -29,11 +29,17 @@ stop and arrival time. Walking segments are always excluded.
 
 - Watchers with a destination stop, active days, and a daily time window
 - Leave trigger: a geofence exit around a location picked on a map or set to
-  your current position; the route always starts from where you are
+  your current position; the route always starts from where you are.
+  Transitions are confirmed against a fresh fix so GPS jitter does not fire a
+  false departure
 - Per watcher icon picker
 - Optional limits per watcher: maximum transfers and maximum travel time
-- Home screen showing the current fastest connection for each watcher,
-  ordered by how close you are to each trigger location
+- Preferred connection per watcher: pick a vehicle type (train, bus, tram,
+  metro, ferry) and Ketch chooses a connection using it, unless it is slower
+  than the fastest by more than a configurable number of minutes
+- Home screen listing every watcher with its current fastest connection, in
+  your own order: pull to refresh, drag or arrow to reorder, and multi select
+  to delete from the top right tools menu
 - Home screen widget showing live connections for selected watchers with a
   manual refresh button
 - Material You design with dynamic colors, light, dark, and system themes

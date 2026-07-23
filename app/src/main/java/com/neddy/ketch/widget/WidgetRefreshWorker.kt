@@ -57,6 +57,8 @@ class WidgetRefreshWorker(
                     connections,
                     maxTransfers = watcher.maxTransfers,
                     maxTravelMinutes = watcher.maxTravelMinutes,
+                    preferredVehicle = watcher.preferredVehicle,
+                    maxTravelDeltaMinutes = watcher.maxTravelDeltaMinutes,
                 )
                 if (best != null) {
                     ConnectionFormatter.notificationTitle(best) + " - " +

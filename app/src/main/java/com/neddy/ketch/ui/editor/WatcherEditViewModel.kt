@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
 import java.time.DayOfWeek
@@ -34,6 +35,9 @@ data class EditUiState(
     val notificationsEnabled: Boolean = true,
     val maxTransfersText: String = "",
     val maxTravelMinutesText: String = "",
+    val preferredVehicle: VehicleCategory? = null,
+    val maxTravelDeltaMinutesText: String = "",
+    val enabled: Boolean = true,
     val saving: Boolean = false,
     val saved: Boolean = false,
     val validationError: String? = null,
@@ -90,6 +94,9 @@ class WatcherEditViewModel(
                 notificationsEnabled = watcher.notificationsEnabled,
                 maxTransfersText = watcher.maxTransfers?.toString().orEmpty(),
                 maxTravelMinutesText = watcher.maxTravelMinutes?.toString().orEmpty(),
+                preferredVehicle = watcher.preferredVehicle,
+                maxTravelDeltaMinutesText = watcher.maxTravelDeltaMinutes?.toString().orEmpty(),
+                enabled = watcher.enabled,
             )
         }
     }
@@ -223,11 +230,22 @@ class WatcherEditViewModel(
     fun setNotificationsEnabled(enabled: Boolean) =
         _uiState.update { it.copy(notificationsEnabled = enabled) }
 
+    fun setEnabled(enabled: Boolean) = _uiState.update { it.copy(enabled = enabled) }
+
     fun setMaxTransfersText(value: String) =
         _uiState.update { it.copy(maxTransfersText = value.filter(Char::isDigit)) }
 
     fun setMaxTravelMinutesText(value: String) =
         _uiState.update { it.copy(maxTravelMinutesText = value.filter(Char::isDigit)) }
+
+    /** Toggles the preferred vehicle; picking the active one clears it. */
+    fun setPreferredVehicle(category: VehicleCategory?) =
+        _uiState.update {
+            it.copy(preferredVehicle = if (it.preferredVehicle == category) null else category)
+        }
+
+    fun setMaxTravelDeltaMinutesText(value: String) =
+        _uiState.update { it.copy(maxTravelDeltaMinutesText = value.filter(Char::isDigit)) }
 
     fun save() {
         val state = _uiState.value
@@ -269,7 +287,11 @@ class WatcherEditViewModel(
                 notificationsEnabled = state.notificationsEnabled,
                 maxTransfers = state.maxTransfersText.toIntOrNull(),
                 maxTravelMinutes = state.maxTravelMinutesText.toIntOrNull(),
-                enabled = editedWatcher?.enabled ?: true,
+                preferredVehicle = state.preferredVehicle,
+                maxTravelDeltaMinutes = state.maxTravelDeltaMinutesText.toIntOrNull()
+                    ?.takeIf { state.preferredVehicle != null },
+                enabled = state.enabled,
+                sortOrder = editedWatcher?.sortOrder ?: 0,
                 lastTriggeredAt = editedWatcher?.lastTriggeredAt,
             )
             container.watcherRepository.save(watcher)

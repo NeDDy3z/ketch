@@ -1,8 +1,6 @@
 package com.neddy.ketch.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
@@ -11,7 +9,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 object Routes {
     const val HOME = "home"
-    const val WATCHERS = "watchers"
     const val SETTINGS = "settings"
     const val WATCHER_EDIT = "watcher_edit?watcherId={watcherId}"
 
@@ -28,11 +25,5 @@ data class BottomNavItem(
 
 val bottomNavItems = listOf(
     BottomNavItem(Routes.HOME, "Home", Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavItem(
-        Routes.WATCHERS,
-        "Watchers",
-        Icons.AutoMirrored.Filled.List,
-        Icons.AutoMirrored.Outlined.List,
-    ),
     BottomNavItem(Routes.SETTINGS, "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 )

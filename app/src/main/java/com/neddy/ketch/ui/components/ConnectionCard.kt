@@ -43,6 +43,7 @@ fun ConnectionCard(
     connection: TransitConnection,
     modifier: Modifier = Modifier,
     titleIcon: ImageVector? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val zone = ZoneId.systemDefault()
     OutlinedCard(modifier = modifier.fillMaxWidth()) {
@@ -55,7 +56,10 @@ fun ConnectionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     if (titleIcon != null) {
                         Icon(
                             imageVector = titleIcon,
@@ -69,11 +73,17 @@ fun ConnectionCard(
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
-                Text(
-                    text = "${connection.travelDuration.toMinutes()} min",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${connection.travelDuration.toMinutes()} min",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (trailingContent != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        trailingContent()
+                    }
+                }
             }
             connection.legs.forEach { leg ->
                 LegRow(leg = leg, zone = zone)

@@ -30,7 +30,6 @@ import com.neddy.ketch.ui.navigation.Routes
 import com.neddy.ketch.ui.navigation.bottomNavItems
 import com.neddy.ketch.ui.settings.SettingsScreen
 import com.neddy.ketch.ui.theme.KetchTheme
-import com.neddy.ketch.ui.watchers.WatchersScreen
 import kotlinx.coroutines.flow.map
 
 class MainActivity : ComponentActivity() {
@@ -102,11 +101,6 @@ fun KetchRoot() {
             composable(Routes.HOME) {
                 HomeScreen(
                     onCreateWatcher = { navController.navigate(Routes.watcherEdit()) },
-                )
-            }
-            composable(Routes.WATCHERS) {
-                WatchersScreen(
-                    onAddWatcher = { navController.navigate(Routes.watcherEdit()) },
                     onEditWatcher = { id -> navController.navigate(Routes.watcherEdit(id)) },
                 )
             }

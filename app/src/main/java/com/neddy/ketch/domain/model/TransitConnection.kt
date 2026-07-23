@@ -16,7 +16,9 @@ data class TransitLeg(
     val arrivalStop: String,
     val arrivalTime: Instant,
     val headsign: String = "",
-)
+) {
+    val category: VehicleCategory get() = VehicleCategory.fromType(vehicleType)
+}
 
 /**
  * A complete connection from origin to destination composed of transit legs.
@@ -32,4 +34,8 @@ data class TransitConnection(
     val arrivalTime: Instant get() = legs.last().arrivalTime
     val transfers: Int get() = legs.size - 1
     val travelDuration: Duration get() = Duration.between(departureTime, arrivalTime)
+
+    /** True when at least one boarding uses the given vehicle [category]. */
+    fun usesCategory(category: VehicleCategory): Boolean =
+        legs.any { it.category == category }
 }

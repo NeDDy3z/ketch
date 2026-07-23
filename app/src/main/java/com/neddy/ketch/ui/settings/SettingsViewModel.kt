@@ -3,6 +3,7 @@ package com.neddy.ketch.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.data.settings.AppSettings
+import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.data.settings.ThemeMode
 import com.neddy.ketch.data.settings.WatcherDefaults
 import com.neddy.ketch.di.AppContainer
@@ -23,6 +24,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setApiKey(key: String) {
         viewModelScope.launch { container.settingsRepository.setApiKey(key) }
+    }
+
+    fun setEditGesture(gesture: EditGesture) {
+        viewModelScope.launch { container.settingsRepository.setEditGesture(gesture) }
     }
 
     fun toggleDefaultDay(day: DayOfWeek) {

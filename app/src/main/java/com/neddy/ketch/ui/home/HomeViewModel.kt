@@ -3,6 +3,7 @@ package com.neddy.ketch.ui.home
 import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
 import com.neddy.ketch.domain.model.StopPlace
@@ -15,23 +16,27 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class WatcherConnection(
     val watcher: Watcher,
     val connection: TransitConnection?,
     val error: String?,
     val loading: Boolean = false,
-)
+) {
+    val disabled: Boolean get() = !watcher.enabled
+}
 
 data class HomeUiState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val watcherConnections: List<WatcherConnection> = emptyList(),
     val hasWatchers: Boolean = true,
     val missingApiKey: Boolean = false,
+    val editGesture: EditGesture = EditGesture.TAP,
 )
 
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
@@ -39,60 +44,144 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    /** The last watcher list a full [load] ran against, for change detection. */
+    private var loadedWatchers: List<Watcher>? = null
+
+    /** Serializes reorder writes so overlapping commits persist in order. */
+    private val reorderMutex = Mutex()
+
     init {
-        // Follow the database so creating, editing, toggling, or deleting a
-        // watcher updates the home screen without a manual refresh.
+        // Follow the database so creating, editing, reordering, or deleting a
+        // watcher updates the home screen without a manual refresh. The order
+        // is the user defined home order, ascending sortOrder.
         viewModelScope.launch {
             container.watcherRepository.observeWatchers()
-                .map { list -> list.filter { it.enabled } }
-                .distinctUntilChanged()
-                .collectLatest { watchers -> load(watchers) }
+                .collectLatest { watchers -> onWatchersChanged(watchers) }
         }
+        viewModelScope.launch {
+            container.settingsRepository.settings
+                .collectLatest { settings ->
+                    _uiState.update { it.copy(editGesture = settings.editGesture) }
+                }
+        }
+    }
+
+    /**
+     * Reacts to a database emission. When only the ordering changed, the cards
+     * are reshuffled in place so a reorder never re-runs the network lookups
+     * or flashes skeletons; any other change triggers a full reload.
+     */
+    private suspend fun onWatchersChanged(watchers: List<Watcher>) {
+        val previous = loadedWatchers
+        if (previous != null && sameIgnoringOrder(previous, watchers)) {
+            loadedWatchers = watchers
+            _uiState.update { state ->
+                val byId = state.watcherConnections.associateBy { it.watcher.id }
+                state.copy(
+                    watcherConnections = watchers.mapNotNull { w ->
+                        byId[w.id]?.copy(watcher = w)
+                    },
+                )
+            }
+            return
+        }
+        loadedWatchers = watchers
+        load(watchers)
+    }
+
+    private fun sameIgnoringOrder(a: List<Watcher>, b: List<Watcher>): Boolean {
+        if (a.size != b.size) return false
+        val normalizedA = a.map { it.copy(sortOrder = 0) }.sortedBy { it.id }
+        val normalizedB = b.map { it.copy(sortOrder = 0) }.sortedBy { it.id }
+        return normalizedA == normalizedB
     }
 
     fun refresh() {
         viewModelScope.launch {
-            load(container.watcherRepository.getWatchers().filter { it.enabled })
+            _uiState.update { it.copy(refreshing = true) }
+            val watchers = container.watcherRepository.getWatchers()
+            loadedWatchers = watchers
+            load(watchers)
+            _uiState.update { it.copy(refreshing = false) }
+        }
+    }
+
+    /** Persists a new home ordering after a drag reorder. */
+    fun reorder(orderedIds: List<Long>) {
+        // Reflect the new order locally right away so the list does not jump.
+        _uiState.update { state ->
+            val byId = state.watcherConnections.associateBy { it.watcher.id }
+            state.copy(watcherConnections = orderedIds.mapNotNull { byId[it] })
+        }
+        viewModelScope.launch {
+            reorderMutex.withLock { container.watcherRepository.reorder(orderedIds) }
+        }
+    }
+
+    fun setEnabled(watcher: Watcher, enabled: Boolean) {
+        if (watcher.enabled == enabled) return
+        viewModelScope.launch {
+            container.watcherRepository.save(watcher.copy(enabled = enabled))
+            container.triggerSyncRequester.requestSync()
+        }
+    }
+
+    fun delete(watchers: List<Watcher>) {
+        if (watchers.isEmpty()) return
+        viewModelScope.launch {
+            watchers.forEach { container.watcherRepository.delete(it) }
+            container.triggerSyncRequester.requestSync()
         }
     }
 
     private suspend fun load(watchers: List<Watcher>) {
         coroutineScope {
-            _uiState.value = _uiState.value.copy(loading = true)
+            _uiState.update { it.copy(loading = true) }
 
             if (watchers.isEmpty()) {
-                _uiState.value = HomeUiState(loading = false, hasWatchers = false)
+                _uiState.update {
+                    it.copy(
+                        loading = false,
+                        hasWatchers = false,
+                        watcherConnections = emptyList(),
+                        missingApiKey = false,
+                    )
+                }
                 return@coroutineScope
             }
 
+            val enabled = watchers.filter { it.enabled }
             val apiKey = container.settingsRepository.current().apiKey
-            if (apiKey.isBlank()) {
-                _uiState.value = HomeUiState(
+            val missingApiKey = enabled.isNotEmpty() && apiKey.isBlank()
+
+            // Seed the list in the user order: enabled watchers start as
+            // loading skeletons, disabled ones render as a muted resting card.
+            _uiState.update {
+                it.copy(
                     loading = false,
                     hasWatchers = true,
-                    missingApiKey = true,
+                    missingApiKey = missingApiKey,
+                    watcherConnections = watchers.map { watcher ->
+                        WatcherConnection(
+                            watcher = watcher,
+                            connection = null,
+                            error = null,
+                            loading = watcher.enabled && !missingApiKey,
+                        )
+                    },
                 )
-                return@coroutineScope
             }
 
-            val location = container.locationProvider.quickLocation()
-            val ordered = orderByProximity(watchers, location)
+            if (missingApiKey) return@coroutineScope
 
-            // Show one skeleton card per watcher right away, then resolve
-            // them one by one in proximity order so the most relevant
-            // connection appears as soon as possible.
-            _uiState.value = HomeUiState(
-                loading = false,
-                hasWatchers = true,
-                watcherConnections = ordered.map {
-                    WatcherConnection(it, connection = null, error = null, loading = true)
-                },
-            )
-            ordered.forEachIndexed { index, watcher ->
+            val location = container.locationProvider.quickLocation()
+            watchers.forEachIndexed { index, watcher ->
+                if (!watcher.enabled) return@forEachIndexed
                 val result = lookup(watcher, location)
                 _uiState.update { state ->
                     val connections = state.watcherConnections.toMutableList()
-                    if (index < connections.size) connections[index] = result
+                    val at = connections.indexOfFirst { it.watcher.id == watcher.id }
+                    if (at >= 0) connections[at] = result
                     state.copy(watcherConnections = connections)
                 }
             }
@@ -118,6 +207,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             connections,
             maxTransfers = watcher.maxTransfers,
             maxTravelMinutes = watcher.maxTravelMinutes,
+            preferredVehicle = watcher.preferredVehicle,
+            maxTravelDeltaMinutes = watcher.maxTravelDeltaMinutes,
         )
         WatcherConnection(
             watcher = watcher,
@@ -134,24 +225,5 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             connection = null,
             error = userMessageFor(e),
         )
-    }
-
-    /**
-     * Watchers whose trigger location is closest to the device come first,
-     * so the most relevant commute is on top.
-     */
-    private fun orderByProximity(watchers: List<Watcher>, location: Location?): List<Watcher> {
-        if (location == null) return watchers
-        return watchers.sortedBy { watcher ->
-            val results = FloatArray(1)
-            Location.distanceBetween(
-                location.latitude,
-                location.longitude,
-                watcher.triggerLatitude,
-                watcher.triggerLongitude,
-                results,
-            )
-            results[0]
-        }
     }
 }

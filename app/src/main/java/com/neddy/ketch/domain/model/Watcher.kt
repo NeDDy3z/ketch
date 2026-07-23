@@ -28,7 +28,21 @@ data class Watcher(
     val notificationsEnabled: Boolean = true,
     val maxTransfers: Int? = null,
     val maxTravelMinutes: Int? = null,
+    /**
+     * Preferred vehicle category. When set, a connection using this category
+     * is chosen over the fastest one, as long as it is not slower than the
+     * fastest by more than [maxTravelDeltaMinutes]. Null means no preference.
+     */
+    val preferredVehicle: VehicleCategory? = null,
+    /**
+     * How many minutes longer the preferred connection may take compared to
+     * the fastest one before the fastest is picked instead. Null means the
+     * preference always wins when a matching connection exists.
+     */
+    val maxTravelDeltaMinutes: Int? = null,
     val enabled: Boolean = true,
+    /** Sort position on the home screen, ascending. Lower shows first. */
+    val sortOrder: Int = 0,
     /** Epoch millis of the last fired notification, used for cooldown. */
     val lastTriggeredAt: Long? = null,
 ) {

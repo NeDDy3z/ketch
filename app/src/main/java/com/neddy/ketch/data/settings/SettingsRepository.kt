@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.map
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** How a home item is opened for editing: a single tap or a long press. */
+enum class EditGesture { TAP, HOLD }
+
 /**
  * Defaults applied when creating a new watcher.
  */
@@ -30,6 +33,7 @@ data class WatcherDefaults(
 data class AppSettings(
     val themeMode: ThemeMode,
     val apiKey: String,
+    val editGesture: EditGesture,
     val watcherDefaults: WatcherDefaults,
 )
 
@@ -40,6 +44,7 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val API_KEY = stringPreferencesKey("api_key")
+        val EDIT_GESTURE = stringPreferencesKey("edit_gesture")
         val DEFAULT_DAYS = stringPreferencesKey("default_days")
         val DEFAULT_WINDOW_START = intPreferencesKey("default_window_start")
         val DEFAULT_WINDOW_END = intPreferencesKey("default_window_end")
@@ -54,6 +59,9 @@ class SettingsRepository(private val context: Context) {
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             apiKey = effectiveApiKey(prefs[Keys.API_KEY]),
+            editGesture = prefs[Keys.EDIT_GESTURE]
+                ?.let { runCatching { EditGesture.valueOf(it) }.getOrNull() }
+                ?: EditGesture.TAP,
             watcherDefaults = WatcherDefaults(
                 activeDays = prefs[Keys.DEFAULT_DAYS]
                     ?.split(',')
@@ -78,6 +86,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setApiKey(key: String) {
         context.dataStore.edit { it[Keys.API_KEY] = key.trim() }
+    }
+
+    suspend fun setEditGesture(gesture: EditGesture) {
+        context.dataStore.edit { it[Keys.EDIT_GESTURE] = gesture.name }
     }
 
     suspend fun setWatcherDefaults(defaults: WatcherDefaults) {

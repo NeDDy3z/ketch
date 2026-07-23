@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,6 +61,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.model.LatLng
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.ui.components.MapPickerDialog
 import com.neddy.ketch.ui.components.SkeletonBox
 import com.neddy.ketch.ui.components.watcherIconCatalog
@@ -66,7 +69,7 @@ import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WatcherEditScreen(
     watcherId: Long?,
@@ -246,6 +249,50 @@ fun WatcherEditScreen(
                     placeholder = { Text("Any") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
+                )
+            }
+
+            SectionTitle("Preferred connection")
+            Text(
+                text = "Prefer a connection using this vehicle. Tap again to clear.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VehicleCategory.selectable.forEach { category ->
+                    FilterChip(
+                        selected = state.preferredVehicle == category,
+                        onClick = { viewModel.setPreferredVehicle(category) },
+                        label = { Text(category.label) },
+                    )
+                }
+            }
+            if (state.preferredVehicle != null) {
+                OutlinedTextField(
+                    value = state.maxTravelDeltaMinutesText,
+                    onValueChange = viewModel::setMaxTravelDeltaMinutesText,
+                    label = { Text("Max extra minutes vs. fastest") },
+                    placeholder = { Text("Always prefer") },
+                    supportingText = {
+                        Text(
+                            "If the preferred connection is slower than the fastest by " +
+                                "more than this, the fastest is used instead.",
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Enabled", style = MaterialTheme.typography.bodyLarge)
+                Switch(
+                    checked = state.enabled,
+                    onCheckedChange = viewModel::setEnabled,
                 )
             }
 

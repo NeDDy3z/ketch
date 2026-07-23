@@ -16,9 +16,20 @@ class WatcherRepository(private val dao: WatcherDao) {
 
     suspend fun getWatcher(id: Long): Watcher? = dao.getById(id)?.toDomain()
 
-    suspend fun save(watcher: Watcher): Long = dao.insert(watcher.toEntity())
+    suspend fun save(watcher: Watcher): Long {
+        // A brand new watcher goes to the end of the home ordering.
+        val toSave = if (watcher.id == 0L) {
+            watcher.copy(sortOrder = dao.maxSortOrder() + 1)
+        } else {
+            watcher
+        }
+        return dao.insert(toSave.toEntity())
+    }
 
     suspend fun delete(watcher: Watcher) = dao.delete(watcher.toEntity())
+
+    /** Persists [orderedIds] as the new home ordering, first id shown first. */
+    suspend fun reorder(orderedIds: List<Long>) = dao.applyOrder(orderedIds)
 
     suspend fun markTriggered(id: Long, timestamp: Long) = dao.markTriggered(id, timestamp)
 }

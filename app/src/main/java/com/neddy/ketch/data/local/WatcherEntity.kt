@@ -3,6 +3,7 @@ package com.neddy.ketch.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.domain.model.Watcher
 import java.time.DayOfWeek
 
@@ -24,7 +25,11 @@ data class WatcherEntity(
     val notificationsEnabled: Boolean,
     val maxTransfers: Int?,
     val maxTravelMinutes: Int?,
+    /** [VehicleCategory] name, or null for no preference. */
+    val preferredVehicle: String?,
+    val maxTravelDeltaMinutes: Int?,
     val enabled: Boolean,
+    val sortOrder: Int,
     val lastTriggeredAt: Long?,
 )
 
@@ -45,7 +50,11 @@ fun WatcherEntity.toDomain(): Watcher = Watcher(
     notificationsEnabled = notificationsEnabled,
     maxTransfers = maxTransfers,
     maxTravelMinutes = maxTravelMinutes,
+    preferredVehicle = preferredVehicle
+        ?.let { runCatching { VehicleCategory.valueOf(it) }.getOrNull() },
+    maxTravelDeltaMinutes = maxTravelDeltaMinutes,
     enabled = enabled,
+    sortOrder = sortOrder,
     lastTriggeredAt = lastTriggeredAt,
 )
 
@@ -65,6 +74,9 @@ fun Watcher.toEntity(): WatcherEntity = WatcherEntity(
     notificationsEnabled = notificationsEnabled,
     maxTransfers = maxTransfers,
     maxTravelMinutes = maxTravelMinutes,
+    preferredVehicle = preferredVehicle?.name,
+    maxTravelDeltaMinutes = maxTravelDeltaMinutes,
     enabled = enabled,
+    sortOrder = sortOrder,
     lastTriggeredAt = lastTriggeredAt,
 )

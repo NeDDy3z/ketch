@@ -17,7 +17,7 @@ place you care about, typically home or work.
 A watcher describes one commute, for example "Home to work". If you commute
 both ways, create two watchers, one for each direction.
 
-1. Open the Watchers tab and tap the add button in the bottom right corner.
+1. On the Home screen, tap the add button in the bottom right corner.
 2. Fill in the fields:
    - Name: anything that helps you recognize the watcher.
    - Icon: pick an icon for the watcher.
@@ -31,6 +31,12 @@ both ways, create two watchers, one for each direction.
    - Time window: the watcher only fires between these times.
    - Limits: optionally cap the number of transfers and the total travel
      time. Connections above the limits are ignored.
+   - Preferred connection: optionally prefer a vehicle type (train, bus,
+     tram, metro, ferry). Ketch then picks a connection that uses that
+     vehicle instead of the plain fastest one. Set "Max extra minutes vs.
+     fastest" to cap how much slower the preferred connection may be before
+     the fastest one is used instead; leave it empty to always prefer.
+   - Enabled: turn the whole watcher on or off.
    - Notifications: turn the notification for this watcher on or off.
 3. Tap Save.
 
@@ -57,18 +63,25 @@ around the trigger area.
 
 ## Home screen
 
-The Home screen shows the current fastest connection for every enabled
-watcher, refreshed on demand with the refresh button. Watchers whose trigger
-location is closest to you are listed first. While lookups run you see
-loading placeholders.
+The Home screen lists all your watchers in your own order, each showing its
+current fastest connection. While lookups run you see loading placeholders.
+Disabled watchers appear as a muted resting card.
 
-## Watchers list
+- Pull down to refresh all connections.
+- Tap (or long press, depending on the Settings option) a watcher to edit it.
+- Flip a watcher's switch to enable or disable it without opening the editor.
+- Add a watcher with the button in the bottom right corner.
 
-The Watchers tab lists all watchers. From here you can:
+### Reordering and deleting
 
-- Toggle a watcher on or off with the switch
-- Delete a watcher with the trash icon
-- Tap a watcher to edit it
+The three dots in the top right corner open the special tools:
+
+- **Reorder**: the list switches to compact rows. Drag the handle on the
+  right, or use the up and down arrows, to move a watcher. The three dots
+  become a cancel button; tap it when you are done.
+- **Delete**: each watcher gets a checkbox. Tick the ones you want to remove
+  and tap the red Delete button at the bottom. The three dots become a
+  cancel button to back out without deleting.
 
 ## Home screen widget
 
@@ -81,7 +94,11 @@ connections. Tapping a row opens Ketch.
 
 ## Settings
 
+Each group of settings sits in its own category card:
+
 - Theme: light, dark, or follow the system.
+- Editing: whether tapping or holding a watcher on the Home screen opens it
+  for editing.
 - API key: the Google Maps Platform key used for lookups.
 - New watcher defaults: active days, time window, and leave radius that
   prefill the editor when you create a new watcher.

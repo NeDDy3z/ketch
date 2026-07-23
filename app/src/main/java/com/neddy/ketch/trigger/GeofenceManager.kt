@@ -54,14 +54,26 @@ class GeofenceManager(private val context: Context) {
                         watcher.triggerRadiusMeters.toFloat(),
                     )
                     .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_EXIT)
-                    .setLoiteringDelay(0)
+                    // Track ENTER as well as EXIT so the platform reliably
+                    // establishes the inside/outside state; without a prior
+                    // inside state a lone EXIT often never fires.
+                    .setTransitionTypes(
+                        Geofence.GEOFENCE_TRANSITION_ENTER or
+                            Geofence.GEOFENCE_TRANSITION_EXIT,
+                    )
+                    // Deliver transitions as soon as they are detected instead
+                    // of letting the OS batch them, which delayed or dropped
+                    // some departures.
+                    .setNotificationResponsiveness(0)
                     .build()
             }
         if (geofences.isEmpty()) return
 
         val request = GeofencingRequest.Builder()
-            .setInitialTrigger(0)
+            // If we register while the device is already at the trigger
+            // location, seed the inside state right away so the next real exit
+            // is detected.
+            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
             .addGeofences(geofences)
             .build()
         runCatching { client.addGeofences(request, pendingIntent).await() }
