@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -55,12 +56,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.model.LatLng
 import com.neddy.ketch.appContainer
+import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.ui.components.MapPickerDialog
@@ -131,15 +134,6 @@ fun WatcherEditScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
-                value = state.name,
-                onValueChange = viewModel::setName,
-                label = { Text("Name") },
-                placeholder = { Text("Leaving home") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(watcherIconCatalog, key = { it.first }) { (key, image) ->
                     FilledIconButton(
@@ -156,24 +150,25 @@ fun WatcherEditScreen(
                 }
             }
 
-            SectionTitle("Trigger")
             OutlinedTextField(
-                value = if (state.hasTriggerLocation) {
-                    "%.5f, %.5f".format(state.triggerLatitude, state.triggerLongitude)
-                } else {
-                    ""
-                },
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Trigger location") },
-                placeholder = { Text("Pick where you leave from") },
-                supportingText = { Text("Fires when you leave this place") },
-                trailingIcon = {
-                    IconButton(onClick = { mapPickerTarget = MapPickerTarget.TRIGGER }) {
-                        Icon(Icons.Filled.Map, contentDescription = "Pick on map")
-                    }
-                },
+                value = state.name,
+                onValueChange = viewModel::setName,
+                label = { Text("Name") },
+                placeholder = { Text("Leaving home") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            SectionTitle("Trigger")
+            TriggerSearchField(
+                query = state.triggerQuery,
+                hasLocation = state.hasTriggerLocation,
+                results = state.triggerResults,
+                searching = state.triggerSearching,
+                error = state.triggerSearchError,
+                onQueryChange = viewModel::setTriggerQuery,
+                onSelect = viewModel::selectTriggerSuggestion,
+                onOpenMap = { mapPickerTarget = MapPickerTarget.TRIGGER },
             )
             Text(
                 text = "Leave radius: ${state.triggerRadiusMeters} m",
@@ -206,8 +201,13 @@ fun WatcherEditScreen(
                         selected = day in state.activeDays,
                         onClick = { viewModel.toggleDay(day) },
                         label = {
-                            Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
+                            Text(
+                                text = day.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                         },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -407,6 +407,7 @@ private fun SectionTitle(text: String) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 
@@ -468,6 +469,67 @@ private fun DestinationSearchField(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSelect(stop) },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TriggerSearchField(
+    query: String,
+    hasLocation: Boolean,
+    results: List<PlaceSuggestion>,
+    searching: Boolean,
+    error: String?,
+    onQueryChange: (String) -> Unit,
+    onSelect: (PlaceSuggestion) -> Unit,
+    onOpenMap: () -> Unit,
+) {
+    Column {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            label = { Text("Trigger location") },
+            placeholder = { Text("Search an address, station or stop") },
+            singleLine = true,
+            supportingText = { Text("Fires when you leave this place") },
+            leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null) },
+            trailingIcon = {
+                if (searching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .width(20.dp)
+                            .height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    IconButton(onClick = onOpenMap) {
+                        Icon(Icons.Filled.Map, contentDescription = "Pick on map")
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (error != null) {
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (results.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                results.take(6).forEach { place ->
+                    ListItem(
+                        headlineContent = { Text(place.name) },
+                        supportingContent = { place.address?.let { Text(it) } },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(place) },
                     )
                     HorizontalDivider()
                 }

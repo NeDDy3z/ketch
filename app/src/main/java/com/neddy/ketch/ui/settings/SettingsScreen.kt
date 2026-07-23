@@ -10,10 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -39,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.EditGesture
+import com.neddy.ketch.data.settings.RefreshScope
 import com.neddy.ketch.data.settings.ThemeMode
 import com.neddy.ketch.ui.components.SkeletonBox
 import java.time.DayOfWeek
@@ -47,13 +54,25 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val viewModel: SettingsViewModel = viewModel { SettingsViewModel(context.appContainer) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
+            )
+        },
     ) { padding ->
         val current = settings
         if (current == null) {
@@ -130,6 +149,40 @@ fun SettingsScreen() {
                 }
             }
 
+            CategoryCard(title = "Refresh") {
+                Text(
+                    text = "What pull to refresh on the home screen looks up.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    RefreshScope.entries.forEachIndexed { index, scope ->
+                        SegmentedButton(
+                            selected = current.refreshScope == scope,
+                            onClick = { viewModel.setRefreshScope(scope) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = RefreshScope.entries.size,
+                            ),
+                        ) {
+                            Text(
+                                when (scope) {
+                                    RefreshScope.ALL -> "All"
+                                    RefreshScope.ACTIVE -> "Active only"
+                                },
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = "Active only skips watchers outside their day and time " +
+                        "window, so a 12:00–14:00 watcher refreshes at 12:30 but not " +
+                        "at 15:00.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             CategoryCard(title = "Google Maps Platform API key") {
                 var apiKeyText by remember(current.apiKey) { mutableStateOf(current.apiKey) }
                 OutlinedTextField(
@@ -162,8 +215,16 @@ fun SettingsScreen() {
                             selected = day in current.watcherDefaults.activeDays,
                             onClick = { viewModel.toggleDefaultDay(day) },
                             label = {
-                                Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
+                                Text(
+                                    text = day.getDisplayName(
+                                        TextStyle.NARROW,
+                                        Locale.getDefault(),
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             },
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
@@ -224,19 +285,28 @@ private fun CategoryCard(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            content()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                content()
+            }
         }
     }
 }

@@ -19,6 +19,13 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class EditGesture { TAP, HOLD }
 
 /**
+ * Which watchers a pull-to-refresh on the home screen looks up again.
+ * [ALL] refreshes every enabled watcher; [ACTIVE] only refreshes watchers
+ * whose active day and time window contain the current moment.
+ */
+enum class RefreshScope { ALL, ACTIVE }
+
+/**
  * Defaults applied when creating a new watcher.
  */
 data class WatcherDefaults(
@@ -34,6 +41,7 @@ data class AppSettings(
     val themeMode: ThemeMode,
     val apiKey: String,
     val editGesture: EditGesture,
+    val refreshScope: RefreshScope,
     val watcherDefaults: WatcherDefaults,
 )
 
@@ -45,6 +53,7 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val API_KEY = stringPreferencesKey("api_key")
         val EDIT_GESTURE = stringPreferencesKey("edit_gesture")
+        val REFRESH_SCOPE = stringPreferencesKey("refresh_scope")
         val DEFAULT_DAYS = stringPreferencesKey("default_days")
         val DEFAULT_WINDOW_START = intPreferencesKey("default_window_start")
         val DEFAULT_WINDOW_END = intPreferencesKey("default_window_end")
@@ -62,6 +71,9 @@ class SettingsRepository(private val context: Context) {
             editGesture = prefs[Keys.EDIT_GESTURE]
                 ?.let { runCatching { EditGesture.valueOf(it) }.getOrNull() }
                 ?: EditGesture.TAP,
+            refreshScope = prefs[Keys.REFRESH_SCOPE]
+                ?.let { runCatching { RefreshScope.valueOf(it) }.getOrNull() }
+                ?: RefreshScope.ALL,
             watcherDefaults = WatcherDefaults(
                 activeDays = prefs[Keys.DEFAULT_DAYS]
                     ?.split(',')
@@ -90,6 +102,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setEditGesture(gesture: EditGesture) {
         context.dataStore.edit { it[Keys.EDIT_GESTURE] = gesture.name }
+    }
+
+    suspend fun setRefreshScope(scope: RefreshScope) {
+        context.dataStore.edit { it[Keys.REFRESH_SCOPE] = scope.name }
     }
 
     suspend fun setWatcherDefaults(defaults: WatcherDefaults) {

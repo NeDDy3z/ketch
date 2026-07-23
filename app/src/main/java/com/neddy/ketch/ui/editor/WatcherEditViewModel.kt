@@ -28,6 +28,10 @@ data class EditUiState(
     val searchError: String? = null,
     val triggerLatitude: Double? = null,
     val triggerLongitude: Double? = null,
+    val triggerQuery: String = "",
+    val triggerResults: List<PlaceSuggestion> = emptyList(),
+    val triggerSearching: Boolean = false,
+    val triggerSearchError: String? = null,
     val triggerRadiusMeters: Int = 150,
     val activeDays: Set<DayOfWeek> = emptySet(),
     val windowStartMinutes: Int = 7 * 60,
@@ -59,6 +63,7 @@ class WatcherEditViewModel(
     val uiState: StateFlow<EditUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var triggerSearchJob: Job? = null
     private var editedWatcher: Watcher? = null
 
     init {
@@ -87,6 +92,10 @@ class WatcherEditViewModel(
                 destinationQuery = watcher.destination.name,
                 triggerLatitude = watcher.triggerLatitude,
                 triggerLongitude = watcher.triggerLongitude,
+                triggerQuery = "%.5f, %.5f".format(
+                    watcher.triggerLatitude,
+                    watcher.triggerLongitude,
+                ),
                 triggerRadiusMeters = watcher.triggerRadiusMeters,
                 activeDays = watcher.activeDays,
                 windowStartMinutes = watcher.windowStartMinutes,
@@ -175,7 +184,71 @@ class WatcherEditViewModel(
 
     fun setTriggerLocation(latitude: Double, longitude: Double) {
         _uiState.update {
-            it.copy(triggerLatitude = latitude, triggerLongitude = longitude)
+            it.copy(
+                triggerLatitude = latitude,
+                triggerLongitude = longitude,
+                triggerQuery = "%.5f, %.5f".format(latitude, longitude),
+                triggerResults = emptyList(),
+                triggerSearchError = null,
+            )
+        }
+    }
+
+    /**
+     * Searches addresses and places for the trigger location, so the user can
+     * set it by typing instead of opening the map. Typing clears any previously
+     * picked coordinates until a suggestion is chosen.
+     */
+    fun setTriggerQuery(query: String) {
+        _uiState.update { it.copy(triggerQuery = query) }
+        triggerSearchJob?.cancel()
+        if (query.length < 3) {
+            _uiState.update {
+                it.copy(
+                    triggerResults = emptyList(),
+                    triggerSearching = false,
+                    triggerSearchError = null,
+                )
+            }
+            return
+        }
+        triggerSearchJob = viewModelScope.launch {
+            delay(400)
+            _uiState.update { it.copy(triggerSearching = true, triggerSearchError = null) }
+            try {
+                val results = container.transitRepository.searchAddresses(query)
+                _uiState.update {
+                    it.copy(
+                        triggerResults = results,
+                        triggerSearching = false,
+                        triggerSearchError = if (results.isEmpty()) {
+                            "No places found for \"$query\""
+                        } else {
+                            null
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        triggerResults = emptyList(),
+                        triggerSearching = false,
+                        triggerSearchError = userMessageFor(e),
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectTriggerSuggestion(suggestion: PlaceSuggestion) {
+        _uiState.update {
+            it.copy(
+                triggerLatitude = suggestion.latitude,
+                triggerLongitude = suggestion.longitude,
+                triggerQuery = suggestion.name,
+                triggerResults = emptyList(),
+                triggerSearchError = null,
+            )
         }
     }
 

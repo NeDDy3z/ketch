@@ -28,10 +28,10 @@ stop and arrival time. Walking segments are always excluded.
 ## Features
 
 - Watchers with a destination stop, active days, and a daily time window
-- Leave trigger: a geofence exit around a location picked on a map or set to
-  your current position; the route always starts from where you are.
-  Transitions are confirmed against a fresh fix so GPS jitter does not fire a
-  false departure
+- Leave trigger: a geofence exit around a location found by searching an
+  address, station or stop, picked on a map, or set to your current position;
+  the route always starts from where you are. Transitions are confirmed against
+  a fresh fix so GPS jitter does not fire a false departure
 - Per watcher icon picker
 - Optional limits per watcher: maximum transfers and maximum travel time
 - Preferred connection per watcher: pick a vehicle type (train, bus, tram,
@@ -39,7 +39,9 @@ stop and arrival time. Walking segments are always excluded.
   than the fastest by more than a configurable number of minutes
 - Home screen listing every watcher with its current fastest connection, in
   your own order: pull to refresh, drag or arrow to reorder, and multi select
-  to delete from the top right tools menu
+  to delete from the top right menu (which also opens Settings)
+- Refresh scope setting: pull to refresh can look up every watcher or only the
+  ones whose active day and time window contain the current moment
 - Home screen widget showing live connections for selected watchers with a
   manual refresh button
 - Modern Material 3 (Material You) design with dynamic colors and light, dark,

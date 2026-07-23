@@ -4,6 +4,7 @@ import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.data.settings.EditGesture
+import com.neddy.ketch.data.settings.RefreshScope
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
 import com.neddy.ketch.domain.model.StopPlace
@@ -11,6 +12,7 @@ import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
 import java.time.Instant
+import java.time.LocalDateTime
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,7 +103,15 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             _uiState.update { it.copy(refreshing = true) }
             val watchers = container.watcherRepository.getWatchers()
             loadedWatchers = watchers
-            load(watchers)
+            // When the user only wants active connections refreshed, skip
+            // watchers whose active day and time window do not contain now.
+            val refreshOnly: ((Watcher) -> Boolean)? =
+                if (container.settingsRepository.current().refreshScope == RefreshScope.ACTIVE) {
+                    { it.isActiveAt(LocalDateTime.now()) }
+                } else {
+                    null
+                }
+            load(watchers, refreshOnly)
             _uiState.update { it.copy(refreshing = false) }
         }
     }
@@ -134,7 +144,15 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    private suspend fun load(watchers: List<Watcher>) {
+    /**
+     * Reloads connections. When [refreshOnly] is given, only watchers matching
+     * it are looked up again; the rest keep whatever card state they had, so a
+     * scoped refresh never clears connections it was told to leave alone.
+     */
+    private suspend fun load(
+        watchers: List<Watcher>,
+        refreshOnly: ((Watcher) -> Boolean)? = null,
+    ) {
         coroutineScope {
             _uiState.update { it.copy(loading = true) }
 
@@ -154,20 +172,36 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             val apiKey = container.settingsRepository.current().apiKey
             val missingApiKey = enabled.isNotEmpty() && apiKey.isBlank()
 
-            // Seed the list in the user order: enabled watchers start as
-            // loading skeletons, disabled ones render as a muted resting card.
+            fun shouldRefresh(watcher: Watcher): Boolean =
+                watcher.enabled && !missingApiKey && (refreshOnly?.invoke(watcher) ?: true)
+
+            val prior = _uiState.value.watcherConnections.associateBy { it.watcher.id }
+
+            // Seed the list in the user order: watchers being refreshed start as
+            // loading skeletons; the rest keep their prior connection so a
+            // scoped refresh does not blank them out.
             _uiState.update {
                 it.copy(
                     loading = false,
                     hasWatchers = true,
                     missingApiKey = missingApiKey,
                     watcherConnections = watchers.map { watcher ->
-                        WatcherConnection(
-                            watcher = watcher,
-                            connection = null,
-                            error = null,
-                            loading = watcher.enabled && !missingApiKey,
-                        )
+                        if (shouldRefresh(watcher)) {
+                            WatcherConnection(
+                                watcher = watcher,
+                                connection = null,
+                                error = null,
+                                loading = true,
+                            )
+                        } else {
+                            val existing = prior[watcher.id]
+                            WatcherConnection(
+                                watcher = watcher,
+                                connection = existing?.connection,
+                                error = existing?.error,
+                                loading = false,
+                            )
+                        }
                     },
                 )
             }
@@ -176,7 +210,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
             val location = container.locationProvider.quickLocation()
             watchers.forEachIndexed { index, watcher ->
-                if (!watcher.enabled) return@forEachIndexed
+                if (!shouldRefresh(watcher)) return@forEachIndexed
                 val result = lookup(watcher, location)
                 _uiState.update { state ->
                     val connections = state.watcherConnections.toMutableList()

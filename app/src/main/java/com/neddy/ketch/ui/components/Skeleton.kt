@@ -50,7 +50,10 @@ fun SkeletonBox(modifier: Modifier = Modifier) {
  */
 @Composable
 fun ConnectionCardSkeleton(modifier: Modifier = Modifier) {
-    OutlinedCard(modifier = modifier.fillMaxWidth()) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             SkeletonBox(
                 modifier = Modifier

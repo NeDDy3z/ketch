@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -30,7 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,14 +41,13 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -70,7 +70,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.EditGesture
-import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
 import com.neddy.ketch.ui.components.watcherIcon
@@ -80,11 +79,15 @@ private enum class HomeMode { NORMAL, REORDER, DELETE }
 private val REORDER_ROW_HEIGHT = 64.dp
 private val LIST_SPACING = 12.dp
 
+/** Slightly tighter corner for the home watcher cards. */
+private val HomeCardShape = RoundedCornerShape(18.dp)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val viewModel: HomeViewModel = viewModel { HomeViewModel(context.appContainer) }
@@ -115,7 +118,8 @@ fun HomeScreen(
                 actions = {
                     if (mode == HomeMode.NORMAL) {
                         ToolsMenu(
-                            enabled = state.watcherConnections.isNotEmpty(),
+                            hasWatchers = state.watcherConnections.isNotEmpty(),
+                            onOpenSettings = onOpenSettings,
                             onReorder = { mode = HomeMode.REORDER },
                             onDelete = { mode = HomeMode.DELETE },
                         )
@@ -129,11 +133,9 @@ fun HomeScreen(
         },
         floatingActionButton = {
             if (mode == HomeMode.NORMAL && state.hasWatchers) {
-                ExtendedFloatingActionButton(
-                    onClick = onCreateWatcher,
-                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                    text = { Text("New watcher") },
-                )
+                FloatingActionButton(onClick = onCreateWatcher) {
+                    Icon(Icons.Filled.Add, contentDescription = "Add watcher")
+                }
             }
         },
         bottomBar = {
@@ -180,7 +182,6 @@ fun HomeScreen(
                     state = state,
                     onCreateWatcher = onCreateWatcher,
                     onEditWatcher = onEditWatcher,
-                    onSetEnabled = viewModel::setEnabled,
                     onRefresh = viewModel::refresh,
                 )
             }
@@ -190,19 +191,29 @@ fun HomeScreen(
 
 @Composable
 private fun ToolsMenu(
-    enabled: Boolean,
+    hasWatchers: Boolean,
+    onOpenSettings: () -> Unit,
     onReorder: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }, enabled = enabled) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Tools")
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.Settings, contentDescription = "Menu")
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
+                text = { Text("Settings") },
+                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onOpenSettings()
+                },
+            )
+            DropdownMenuItem(
                 text = { Text("Reorder") },
                 leadingIcon = { Icon(Icons.Filled.DragHandle, contentDescription = null) },
+                enabled = hasWatchers,
                 onClick = {
                     expanded = false
                     onReorder()
@@ -211,6 +222,7 @@ private fun ToolsMenu(
             DropdownMenuItem(
                 text = { Text("Delete") },
                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                enabled = hasWatchers,
                 onClick = {
                     expanded = false
                     onDelete()
@@ -250,7 +262,6 @@ private fun NormalList(
     state: HomeUiState,
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
-    onSetEnabled: (Watcher, Boolean) -> Unit,
     onRefresh: () -> Unit,
 ) {
     LazyColumn(
@@ -279,12 +290,6 @@ private fun NormalList(
             ) { _, item ->
                 val open = { onEditWatcher(item.watcher.id) }
                 val tapToEdit = state.editGesture == EditGesture.TAP
-                val enableSwitch: @Composable () -> Unit = {
-                    Switch(
-                        checked = item.watcher.enabled,
-                        onCheckedChange = { onSetEnabled(item.watcher, it) },
-                    )
-                }
                 Box(
                     modifier = Modifier.combinedClickable(
                         onClick = { if (tapToEdit) open() },
@@ -293,21 +298,16 @@ private fun NormalList(
                 ) {
                     val connection = item.connection
                     when {
-                        item.disabled -> DisabledCard(
-                            name = item.watcher.name,
-                            trailingContent = enableSwitch,
-                        )
+                        item.disabled -> DisabledCard(name = item.watcher.name)
                         item.loading -> ConnectionCardSkeleton()
                         connection != null -> ConnectionCard(
                             title = item.watcher.name,
                             connection = connection,
                             titleIcon = watcherIcon(item.watcher.icon),
-                            trailingContent = enableSwitch,
                         )
                         else -> InfoCard(
                             title = item.watcher.name,
                             body = item.error ?: "No connection found",
-                            trailingContent = enableSwitch,
                         )
                     }
                 }
@@ -480,7 +480,7 @@ private fun DeleteList(
 
 @Composable
 private fun DisabledCard(name: String, trailingContent: (@Composable () -> Unit)? = null) {
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = HomeCardShape) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -563,6 +563,7 @@ private fun InfoCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = HomeCardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
         ),
