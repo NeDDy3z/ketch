@@ -1,34 +1,21 @@
 package com.neddy.ketch.ui.theme
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+// Start from the Material 3 default type scale (correct Roboto metrics, sizes
+// and tracking) and lean into a more expressive, modern feel by emphasizing the
+// weight of headlines, titles and labels. This lets screens rely on the scale
+// instead of sprinkling manual FontWeight.Bold overrides everywhere.
+private val Default = Typography()
+
+val Typography = Default.copy(
+    headlineLarge = Default.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
+    headlineMedium = Default.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+    headlineSmall = Default.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+    titleLarge = Default.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+    titleMedium = Default.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+    titleSmall = Default.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+    labelLarge = Default.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+    labelMedium = Default.labelMedium.copy(fontWeight = FontWeight.SemiBold),
 )

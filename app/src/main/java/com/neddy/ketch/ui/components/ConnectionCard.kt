@@ -1,12 +1,13 @@
 package com.neddy.ketch.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsBus
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Tram
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -49,7 +51,7 @@ fun ConnectionCard(
     OutlinedCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -74,19 +76,17 @@ fun ConnectionCard(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${connection.travelDuration.toMinutes()} min",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    DurationBadge(minutes = connection.travelDuration.toMinutes())
                     if (trailingContent != null) {
                         Spacer(modifier = Modifier.width(8.dp))
                         trailingContent()
                     }
                 }
             }
-            connection.legs.forEach { leg ->
-                LegRow(leg = leg, zone = zone)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                connection.legs.forEach { leg ->
+                    LegRow(leg = leg, zone = zone)
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -104,7 +104,7 @@ fun ConnectionCard(
                         "${connection.transfers} transfer" +
                             if (connection.transfers > 1) "s" else ""
                     },
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -113,13 +113,37 @@ fun ConnectionCard(
 }
 
 @Composable
+private fun DurationBadge(minutes: Long) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Text(
+            text = "$minutes min",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
 private fun LegRow(leg: TransitLeg, zone: ZoneId) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = vehicleIcon(leg.vehicleType),
-            contentDescription = leg.vehicleType,
-            tint = MaterialTheme.colorScheme.primary,
-        )
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = vehicleIcon(leg.vehicleType),
+                    contentDescription = leg.vehicleType,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
@@ -135,5 +159,4 @@ private fun LegRow(leg: TransitLeg, zone: ZoneId) {
             )
         }
     }
-    Spacer(modifier = Modifier.height(2.dp))
 }

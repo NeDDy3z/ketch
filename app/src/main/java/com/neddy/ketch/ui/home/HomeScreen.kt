@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Train
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -38,12 +40,13 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -59,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -124,10 +128,12 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            if (mode == HomeMode.NORMAL) {
-                FloatingActionButton(onClick = onCreateWatcher) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add watcher")
-                }
+            if (mode == HomeMode.NORMAL && state.hasWatchers) {
+                ExtendedFloatingActionButton(
+                    onClick = onCreateWatcher,
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("New watcher") },
+                )
             }
         },
         bottomBar = {
@@ -505,24 +511,46 @@ private fun DisabledCard(name: String, trailingContent: (@Composable () -> Unit)
 
 @Composable
 private fun EmptyState(onCreateWatcher: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            Text(
-                text = "No watchers yet",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Create a watcher with your destination, trigger location " +
-                    "and time window. Ketch will tell you which connection to catch " +
-                    "when you leave.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onCreateWatcher) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text(text = "Create watcher", modifier = Modifier.padding(start = 8.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(96.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Filled.Train,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(44.dp),
+                )
             }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "No watchers yet",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Add your destination, the place you leave from and a time " +
+                "window. Ketch tells you which connection to catch as you head out.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onCreateWatcher,
+            modifier = Modifier.height(52.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Text(text = "Create your first watcher", modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

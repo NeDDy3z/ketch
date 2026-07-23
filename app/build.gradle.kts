@@ -27,8 +27,8 @@ android {
         applicationId = "com.neddy.ketch"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
 
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
@@ -44,6 +44,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Sign release builds with the debug key so the published APK is
+            // installable. This is a private hobby app, not a Play Store upload.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

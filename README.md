@@ -42,7 +42,9 @@ stop and arrival time. Walking segments are always excluded.
   to delete from the top right tools menu
 - Home screen widget showing live connections for selected watchers with a
   manual refresh button
-- Material You design with dynamic colors, light, dark, and system themes
+- Modern Material 3 (Material You) design with dynamic colors and light, dark,
+  and system themes. A cohesive rounded shape scale keeps inputs, chips, cards,
+  and buttons in one visual family, with an emphasized type scale for hierarchy
 - Skeleton loading states while lookups run
 - Local persistence with Room, settings in DataStore
 - Configurable defaults for new watchers

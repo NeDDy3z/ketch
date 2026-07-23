@@ -48,6 +48,7 @@ fun KetchTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = KetchShapes,
         content = content,
     )
 }
