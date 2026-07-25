@@ -106,10 +106,13 @@ Connections read left-to-right like a departure board:
 ## 6. Per-screen rules
 
 ### Home
-- No top app bar chrome: a 48dp end-aligned action row (`sync`, `settings` icon buttons,
-  44dp circular, onSurfaceVariant) above the large "Ketch" title + "N watchers · updated H:MM"
-  subtitle.
+- No top app bar chrome: a pinned surface header with the large "Ketch" title inline with the
+  end-aligned action row (`sync`, `settings` icon buttons, 44dp circular, onSurfaceVariant),
+  "N watchers" / "Finding connections…" on the line beneath. The header stays put while the
+  list scrolls under it.
 - Watcher cards per §5. FAB 64dp / 20dp radius, primaryContainer, `add` 28dp.
+- Double tapping a card hands the route to Google Maps as public transport directions to the
+  watcher destination.
 - **Modes swap the app bar, not the layout**: reorder & multi-select promote a contextual
   top bar (close + title/count + action) so the list stays put. Multi-select bar is
   secondaryContainer edge-to-edge; selected rows invert to primaryContainer with primary
@@ -170,11 +173,14 @@ Connections read left-to-right like a departure board:
 
 ### Widget (Glance)
 - Raised 26dp panel (surfaceContainerLow light / surfaceContainerHigh dark) — the one place
-  elevation is intentional. Header: 34dp primary logo tile (`sailing`), "Ketch" 14sp/700,
-  32dp refresh circle.
-- One watcher per 18dp-radius inner card: 30dp icon tile, name 13sp/600, primary duration
-  pill, then the same departure-board timeline (13sp/700 times, 9sp line chips, arrival in
-  tertiary with "arrive" label).
+  elevation is intentional. Header: 34dp primary logo tile (`sailing`) that opens the widget
+  configuration, "Ketch" 14sp/700, 32dp refresh circle.
+- **One connection owns the panel.** The watcher fills an 18dp-radius inner card — name
+  13sp/600 over the departure-board journey, one boarding per line — and the panel pages
+  between watchers: 28dp chevrons on the edges (wrapping around) with dot indicators between
+  them, active dot in primary, inactive in outline. Dots jump straight to a connection.
+- The widget follows its resize (`SizeMode.Exact`): the wordmark drops below 200dp wide and the
+  journey line count follows the available height.
 - The dark widget uses **fixed white / white-alpha text** so it stays legible on any
   wallpaper.
 

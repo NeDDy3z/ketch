@@ -61,8 +61,10 @@ class WidgetRefreshWorker(
                     maxTravelDeltaMinutes = watcher.maxTravelDeltaMinutes,
                 )
                 if (best != null) {
-                    ConnectionFormatter.notificationTitle(best) + " - " +
-                        ConnectionFormatter.notificationText(best)
+                    // One boarding per line: a connection owns a whole widget
+                    // page, so it reads like a departure board.
+                    ConnectionFormatter.notificationTitle(best) + "\n" +
+                        ConnectionFormatter.notificationBigText(best)
                 } else {
                     "No connection found"
                 }

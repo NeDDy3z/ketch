@@ -215,8 +215,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                     RadioRow(
                         selected = current.refreshScope == RefreshScope.ACTIVE,
                         title = "Only active watchers",
-                        subtitle = "Skips watchers outside their day & time window — a " +
-                            "12:00–14:00 watcher refreshes at 12:30 but not at 15:00.",
                         onClick = { viewModel.setRefreshScope(RefreshScope.ACTIVE) },
                         tintWhenSelected = true,
                     )
@@ -388,12 +386,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Ketch v${BuildConfig.VERSION_NAME} · ",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "Made by Erik Vaněk",
+                    text = "Ketch v${BuildConfig.VERSION_NAME}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable {

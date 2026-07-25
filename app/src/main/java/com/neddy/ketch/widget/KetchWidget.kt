@@ -1,9 +1,11 @@
 package com.neddy.ketch.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -12,17 +14,19 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.components.CircleIconButton
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
-import androidx.glance.action.actionStartActivity
-import androidx.glance.action.clickable
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
@@ -66,12 +70,20 @@ private val PanelBackground = ColorProvider(
     night = DarkColors.surfaceContainerHigh,
 )
 
+/** Widget id carried to [WidgetConfigActivity] when opening it from the widget. */
+private val AppWidgetIdKey = ActionParameters.Key<Int>(AppWidgetManager.EXTRA_APPWIDGET_ID)
+
 /**
- * Home screen widget showing the current fastest connection for the
- * watchers picked in the widget configuration. The list scrolls and the
- * refresh button re-fetches all lines.
+ * Home screen widget showing the current fastest connection for the watchers
+ * picked in the widget configuration. One connection fills the panel at a
+ * time; the dots and arrows at the bottom page between them, the logo tile
+ * opens the widget configuration and the refresh button re-fetches all lines.
  */
 class KetchWidget : GlanceAppWidget() {
+
+    // Exact so the layout follows the user's resize instead of being rendered
+    // once for the smallest cell size.
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -87,9 +99,13 @@ class KetchWidget : GlanceAppWidget() {
                 )
             }
         }
+        // A watcher can disappear between two renders, so the stored page is
+        // clamped instead of trusted.
+        val page = WidgetPrefs.page(context, appWidgetId)
+            .coerceIn(0, maxOf(0, entries.lastIndex))
         provideContent {
             GlanceTheme(colors = WidgetColors) {
-                WidgetContent(entries)
+                WidgetContent(appWidgetId = appWidgetId, entries = entries, page = page)
             }
         }
     }
@@ -99,30 +115,40 @@ class KetchWidget : GlanceAppWidget() {
 private fun GlanceModifier.roundedCorners(radius: Dp): GlanceModifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) cornerRadius(radius) else this
 
+/**
+ * How many journey lines fit next to the header and the pager bar. Header,
+ * pager and panel padding take about 104dp, every journey line about 17dp.
+ */
+private fun journeyLines(size: DpSize): Int =
+    ((size.height - 104.dp) / 17.dp).toInt().coerceIn(1, 8)
+
 @Composable
-private fun WidgetContent(entries: List<WidgetEntry>) {
+private fun WidgetContent(appWidgetId: Int, entries: List<WidgetEntry>, page: Int) {
+    val size = LocalSize.current
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(PanelBackground)
             .roundedCorners(26.dp)
-            .padding(top = 14.dp, bottom = 13.dp),
+            .padding(top = 14.dp, bottom = 11.dp),
     ) {
-        WidgetHeader()
-        if (entries.isEmpty()) {
-            EmptyCard()
-        } else {
-            LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                items(entries, itemId = { it.watcherId }) { entry ->
-                    WatcherCard(entry)
-                }
+        // The wordmark is the first thing dropped when the widget is narrow.
+        WidgetHeader(appWidgetId = appWidgetId, showTitle = size.width >= 200.dp)
+        Box(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+            if (entries.isEmpty()) {
+                EmptyCard(appWidgetId = appWidgetId)
+            } else {
+                WatcherCard(entry = entries[page], journeyLines = journeyLines(size))
             }
+        }
+        if (entries.size > 1) {
+            PagerBar(count = entries.size, page = page)
         }
     }
 }
 
 @Composable
-private fun WidgetHeader() {
+private fun WidgetHeader(appWidgetId: Int, showTitle: Boolean) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -134,25 +160,28 @@ private fun WidgetHeader() {
                 .size(34.dp)
                 .background(GlanceTheme.colors.primary)
                 .roundedCorners(11.dp)
-                .clickable(actionStartActivity<MainActivity>()),
+                .clickable(openWidgetSettings(appWidgetId)),
             contentAlignment = Alignment.Center,
         ) {
             Image(
                 provider = ImageProvider(R.drawable.ic_widget_logo),
-                contentDescription = "Open Ketch",
+                contentDescription = "Widget settings",
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
                 modifier = GlanceModifier.size(19.dp),
             )
         }
-        Spacer(modifier = GlanceModifier.width(9.dp))
-        Text(
-            text = "Ketch",
-            style = TextStyle(
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = GlanceTheme.colors.onSurface,
-            ),
-        )
+        if (showTitle) {
+            Spacer(modifier = GlanceModifier.width(9.dp))
+            Text(
+                text = "Ketch",
+                style = TextStyle(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = GlanceTheme.colors.onSurface,
+                ),
+                maxLines = 1,
+            )
+        }
         Spacer(modifier = GlanceModifier.defaultWeight())
         CircleIconButton(
             imageProvider = ImageProvider(R.drawable.ic_widget_refresh),
@@ -165,14 +194,19 @@ private fun WidgetHeader() {
     }
 }
 
-// The cached connection line is a single preformatted string, so there is no
-// separate duration value to surface as a badge; the card shows name + line.
+/** Opens the widget configuration for this widget instance. */
+private fun openWidgetSettings(appWidgetId: Int) = actionStartActivity<WidgetConfigActivity>(
+    actionParametersOf(AppWidgetIdKey to appWidgetId),
+)
+
+// The cached connection line is a preformatted block, one boarding per line,
+// so there is no separate duration value to surface as a badge.
 @Composable
-private fun WatcherCard(entry: WidgetEntry) {
-    Box(modifier = GlanceModifier.padding(start = 15.dp, end = 15.dp, bottom = 10.dp)) {
+private fun WatcherCard(entry: WidgetEntry, journeyLines: Int) {
+    Box(modifier = GlanceModifier.padding(horizontal = 15.dp)) {
         Column(
             modifier = GlanceModifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .background(GlanceTheme.colors.surfaceVariant)
                 .roundedCorners(18.dp)
                 .clickable(actionStartActivity<MainActivity>())
@@ -187,32 +221,108 @@ private fun WatcherCard(entry: WidgetEntry) {
                 ),
                 maxLines = 1,
             )
-            Spacer(modifier = GlanceModifier.height(8.dp))
+            Spacer(modifier = GlanceModifier.height(6.dp))
             Text(
                 text = entry.connectionLine,
                 style = TextStyle(
                     fontSize = 12.sp,
                     color = GlanceTheme.colors.onSurfaceVariant,
                 ),
-                maxLines = 3,
+                maxLines = journeyLines,
             )
         }
     }
 }
 
+/**
+ * Pager controls for the connections: chevrons on the edges wrapping around,
+ * dots in the middle that jump straight to a connection.
+ */
 @Composable
-private fun EmptyCard() {
+private fun PagerBar(count: Int, page: Int) {
+    Row(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, start = 9.dp, end = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PagerArrow(
+            icon = R.drawable.ic_widget_chevron_left,
+            description = "Previous connection",
+            step = -1,
+        )
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            repeat(count) { index -> PagerDot(index = index, active = index == page) }
+        }
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        PagerArrow(
+            icon = R.drawable.ic_widget_chevron_right,
+            description = "Next connection",
+            step = 1,
+        )
+    }
+}
+
+/**
+ * The arrows carry a step, not a target page: the click intents outlive the
+ * render they were built in, so the page they move from is read when the
+ * click arrives instead of being baked in.
+ */
+@Composable
+private fun PagerArrow(icon: Int, description: String, step: Int) {
+    CircleIconButton(
+        imageProvider = ImageProvider(icon),
+        contentDescription = description,
+        onClick = actionRunCallback<StepPageAction>(
+            actionParametersOf(StepPageAction.STEP to step),
+        ),
+        backgroundColor = null,
+        contentColor = GlanceTheme.colors.onSurfaceVariant,
+        modifier = GlanceModifier.size(28.dp),
+    )
+}
+
+@Composable
+private fun PagerDot(index: Int, active: Boolean) {
+    Box(
+        modifier = GlanceModifier
+            .padding(horizontal = 4.dp, vertical = 7.dp)
+            .clickable(showPage(index)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            provider = ImageProvider(R.drawable.ic_widget_dot),
+            contentDescription = "Connection ${index + 1}",
+            colorFilter = ColorFilter.tint(
+                if (active) GlanceTheme.colors.primary else GlanceTheme.colors.outline,
+            ),
+            modifier = GlanceModifier.size(if (active) 8.dp else 6.dp),
+        )
+    }
+}
+
+private fun showPage(page: Int) = actionRunCallback<ShowPageAction>(
+    actionParametersOf(ShowPageAction.PAGE to page),
+)
+
+/** Number of connections a widget pages through. */
+private fun pageCount(context: Context, appWidgetId: Int): Int =
+    WidgetPrefs.selectedWatchers(context, appWidgetId).size
+
+@Composable
+private fun EmptyCard(appWidgetId: Int) {
     Box(modifier = GlanceModifier.padding(horizontal = 15.dp)) {
         Box(
             modifier = GlanceModifier
                 .fillMaxWidth()
                 .background(GlanceTheme.colors.surfaceVariant)
                 .roundedCorners(18.dp)
-                .clickable(actionStartActivity<MainActivity>())
+                .clickable(openWidgetSettings(appWidgetId))
                 .padding(vertical = 12.dp, horizontal = 13.dp),
         ) {
             Text(
-                text = "Tap to pick watchers in Ketch",
+                text = "Tap to pick watchers for this widget",
                 style = TextStyle(
                     fontSize = 12.sp,
                     color = GlanceTheme.colors.onSurfaceVariant,
@@ -226,8 +336,49 @@ class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(
         context: Context,
         glanceId: GlanceId,
-        parameters: androidx.glance.action.ActionParameters,
+        parameters: ActionParameters,
     ) {
         WidgetRefreshWorker.enqueue(context)
+    }
+}
+
+/** Jumps the widget's connection pager straight to a page, used by the dots. */
+class ShowPageAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val page = parameters[PAGE] ?: return
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+        val count = pageCount(context, appWidgetId)
+        if (page !in 0 until count) return
+        WidgetPrefs.setPage(context, appWidgetId, page)
+        KetchWidget().update(context, glanceId)
+    }
+
+    companion object {
+        val PAGE = ActionParameters.Key<Int>("page")
+    }
+}
+
+/** Steps the widget's connection pager one page, wrapping around at the ends. */
+class StepPageAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val step = parameters[STEP] ?: return
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+        val count = pageCount(context, appWidgetId)
+        if (count <= 1) return
+        val current = WidgetPrefs.page(context, appWidgetId).coerceIn(0, count - 1)
+        WidgetPrefs.setPage(context, appWidgetId, (current + step + count) % count)
+        KetchWidget().update(context, glanceId)
+    }
+
+    companion object {
+        val STEP = ActionParameters.Key<Int>("step")
     }
 }

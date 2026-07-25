@@ -95,6 +95,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.domain.model.Watcher
+import com.neddy.ketch.maps.TransitDirections
 import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
 import com.neddy.ketch.ui.components.WatcherCardHeader
@@ -144,7 +145,13 @@ fun HomeScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             when (mode) {
-                HomeMode.NORMAL -> Unit
+                HomeMode.NORMAL -> HomeHeader(
+                    state = state,
+                    onRefresh = viewModel::refresh,
+                    onOpenSettings = onOpenSettings,
+                    onReorder = { mode = HomeMode.REORDER },
+                    onDelete = { mode = HomeMode.DELETE },
+                )
                 HomeMode.REORDER -> ReorderTopBar(
                     onClose = { exitMode() },
                     onDone = { exitMode() },
@@ -209,9 +216,6 @@ fun HomeScreen(
                     onCreateWatcher = onCreateWatcher,
                     onEditWatcher = onEditWatcher,
                     onRefresh = viewModel::refresh,
-                    onOpenSettings = onOpenSettings,
-                    onReorder = { mode = HomeMode.REORDER },
-                    onDelete = { mode = HomeMode.DELETE },
                     onEnableWatcher = { viewModel.setEnabled(it, true) },
                 )
             }
@@ -231,15 +235,21 @@ private fun HomeHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(
+                text = "Ketch",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier.size(44.dp),
@@ -258,16 +268,10 @@ private fun HomeHeader(
                 onDelete = onDelete,
             )
         }
-        Text(
-            text = "Ketch",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 6.dp),
-        )
         val busy = state.loading || state.watcherConnections.any { it.loading }
         if (busy) {
             Row(
-                modifier = Modifier.padding(top = 3.dp),
+                modifier = Modifier.padding(top = 1.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -287,7 +291,7 @@ private fun HomeHeader(
                 text = if (count == 1) "1 watcher" else "$count watchers",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 3.dp),
+                modifier = Modifier.padding(top = 1.dp),
             )
         }
     }
@@ -456,38 +460,23 @@ private fun NormalContent(
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
     onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onReorder: () -> Unit,
-    onDelete: () -> Unit,
     onEnableWatcher: (Watcher) -> Unit,
 ) {
     if (!state.loading && !state.hasWatchers) {
         EmptyState(
-            state = state,
             onCreateWatcher = onCreateWatcher,
             onRefresh = onRefresh,
-            onOpenSettings = onOpenSettings,
-            onReorder = onReorder,
-            onDelete = onDelete,
         )
         return
     }
 
+    val context = LocalContext.current
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(LIST_SPACING),
     ) {
-        item {
-            HomeHeader(
-                state = state,
-                onRefresh = onRefresh,
-                onOpenSettings = onOpenSettings,
-                onReorder = onReorder,
-                onDelete = onDelete,
-            )
-        }
-
         item { PermissionsSection(onGranted = onRefresh) }
 
         when {
@@ -511,6 +500,11 @@ private fun NormalContent(
                     modifier = Modifier.combinedClickable(
                         onClick = { if (tapToEdit) open() },
                         onLongClick = { if (!tapToEdit) open() },
+                        // Double tap hands the route to Google Maps as public
+                        // transport directions to the watcher destination.
+                        onDoubleClick = {
+                            TransitDirections.open(context, item.watcher.destination)
+                        },
                     ),
                 ) {
                     val connection = item.connection
@@ -540,12 +534,8 @@ private fun NormalContent(
 
 @Composable
 private fun EmptyState(
-    state: HomeUiState,
     onCreateWatcher: () -> Unit,
     onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onReorder: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -553,17 +543,9 @@ private fun EmptyState(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
         ) {
-            HomeHeader(
-                state = state,
-                onRefresh = onRefresh,
-                onOpenSettings = onOpenSettings,
-                onReorder = onReorder,
-                onDelete = onDelete,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
             PermissionsSection(
                 onGranted = onRefresh,
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
             )
             Spacer(modifier = Modifier.height(44.dp))
             Column(

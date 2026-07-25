@@ -69,6 +69,8 @@ Disabled watchers appear as a muted resting card.
 
 - Pull down to refresh all connections.
 - Tap (or long press, depending on the Settings option) a watcher to edit it.
+- Double tap a watcher to open the route in Google Maps as public transport
+  directions to its destination.
 - Flip a watcher's switch to enable or disable it without opening the editor.
 - Add a watcher with the button in the bottom right corner.
 
@@ -87,10 +89,15 @@ The three dots in the top right corner open the special tools:
 
 Long press your launcher home screen, open the widgets list, and drop the
 Ketch widget. A configuration screen opens where you tick the watchers the
-widget should show; you can pick several. The widget lists each selected
-watcher with its name and the current fastest connection, scrollable when
-they do not fit. The circle button in the top right corner re-fetches all
-connections. Tapping a row opens Ketch.
+widget should show; you can pick several. Resize the widget by long pressing
+it and dragging its handles — the layout follows the size you give it.
+
+The widget shows one watcher at a time: its name and the current fastest
+connection, one boarding per line. The chevrons at the bottom move to the
+previous or next watcher and the dots between them show where you are; tap a
+dot to jump straight to that watcher. The circle button in the top right
+corner re-fetches all connections, the logo tile in the top left reopens the
+widget configuration, and tapping the connection opens Ketch.
 
 ## Settings
 

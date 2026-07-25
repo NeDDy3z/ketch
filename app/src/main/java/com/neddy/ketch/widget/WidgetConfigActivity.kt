@@ -54,8 +54,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Configuration shown when the widget is dropped on the home screen. The
- * user picks which watchers the widget cycles through.
+ * Configuration shown when the widget is dropped on the home screen, and
+ * again whenever the widget's logo tile is tapped. The user picks which
+ * watchers the widget pages through.
  */
 class WidgetConfigActivity : ComponentActivity() {
 
@@ -83,6 +84,9 @@ class WidgetConfigActivity : ComponentActivity() {
                 ConfigContent(
                     watchersFlow = watchersFlow,
                     initialSelection = initialSelection,
+                    // An existing selection means the widget is already on the
+                    // home screen and is only being reconfigured.
+                    confirmLabel = if (initialSelection.isEmpty()) "Add widget" else "Save",
                     onBack = { finish() },
                     onConfirm = { selected ->
                         WidgetPrefs.setSelectedWatchers(this, appWidgetId, selected)
@@ -103,6 +107,7 @@ class WidgetConfigActivity : ComponentActivity() {
 private fun ConfigContent(
     watchersFlow: Flow<List<Watcher>>,
     initialSelection: Set<Long>,
+    confirmLabel: String,
     onBack: () -> Unit,
     onConfirm: (List<Long>) -> Unit,
 ) {
@@ -148,7 +153,7 @@ private fun ConfigContent(
                     .padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 14.dp)
                     .height(54.dp),
             ) {
-                Text("Add widget")
+                Text(confirmLabel)
             }
         },
     ) { padding ->
