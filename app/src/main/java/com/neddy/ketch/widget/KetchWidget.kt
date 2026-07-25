@@ -56,6 +56,9 @@ import java.time.LocalDateTime
 data class WidgetEntry(
     val watcherId: Long,
     val name: String,
+    val icon: String,
+    /** Laid out as a departure board when present; the text is the fallback. */
+    val journey: WidgetJourney?,
     val connectionLine: String,
 )
 
@@ -89,6 +92,25 @@ private fun widgetColors(palette: ColorPalette, theme: WidgetTheme) = run {
  * roles on [GlanceTheme.colors], so the raised panel takes its tone straight
  * from the resolved scheme — a widget must lift off arbitrary wallpaper.
  */
+private fun innerCardBackground(palette: ColorPalette, theme: WidgetTheme) = run {
+    val dark = widgetScheme(palette)
+    val light = lightCounterpart(dark)
+    when (theme) {
+        WidgetTheme.SYSTEM -> ColorProvider(
+            day = light.surfaceContainerHighest,
+            night = dark.surfaceContainerHighest,
+        )
+        WidgetTheme.LIGHT -> ColorProvider(
+            day = light.surfaceContainerHighest,
+            night = light.surfaceContainerHighest,
+        )
+        WidgetTheme.DARK -> ColorProvider(
+            day = dark.surfaceContainerHighest,
+            night = dark.surfaceContainerHighest,
+        )
+    }
+}
+
 private fun panelBackground(palette: ColorPalette, theme: WidgetTheme) = run {
     val dark = widgetScheme(palette)
     val light = lightCounterpart(dark)
@@ -133,6 +155,8 @@ class KetchWidget : GlanceAppWidget() {
             WidgetEntry(
                 watcherId = watcher.id,
                 name = watcher.name,
+                icon = watcher.icon,
+                journey = WidgetPrefs.journey(context, watcher.id),
                 connectionLine = WidgetPrefs.connectionLine(context, watcher.id)
                     ?: "Loading...",
             )
@@ -194,7 +218,12 @@ private fun WidgetContent(
             if (entries.isEmpty()) {
                 EmptyCard(appWidgetId = appWidgetId, allResting = allResting)
             } else {
-                WatcherCard(entry = entries[page], journeyLines = journeyLines(size))
+                WatcherCard(
+                    entry = entries[page],
+                    journeyLines = journeyLines(size),
+                    palette = palette,
+                    theme = theme,
+                )
             }
         }
         if (entries.size > 1) {
@@ -228,15 +257,27 @@ private fun WidgetHeader(appWidgetId: Int, showTitle: Boolean) {
         }
         if (showTitle) {
             Spacer(modifier = GlanceModifier.width(9.dp))
-            Text(
-                text = "Ketch",
-                style = TextStyle(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = GlanceTheme.colors.onSurface,
-                ),
-                maxLines = 1,
-            )
+            Column {
+                Text(
+                    text = "Ketch",
+                    style = TextStyle(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = GlanceTheme.colors.onSurface,
+                    ),
+                    maxLines = 1,
+                )
+                // The logo tile is the only non-obvious target on the widget,
+                // so it says what it does.
+                Text(
+                    text = "logo \u2192 widget settings",
+                    style = TextStyle(
+                        fontSize = 10.sp,
+                        color = GlanceTheme.colors.onSurfaceVariant,
+                    ),
+                    maxLines = 1,
+                )
+            }
         }
         Spacer(modifier = GlanceModifier.defaultWeight())
         CircleIconButton(
@@ -255,39 +296,207 @@ private fun openWidgetSettings(appWidgetId: Int) = actionStartActivity<WidgetCon
     actionParametersOf(AppWidgetIdKey to appWidgetId),
 )
 
-// The cached connection line is a preformatted block, one boarding per line,
-// so there is no separate duration value to surface as a badge.
+/**
+ * One watcher owns the whole page: an identity row with the duration badge, then
+ * the journey laid out like a departure board — times on the outside, line chips
+ * riding the rail between them, arrival in tertiary.
+ */
 @Composable
-private fun WatcherCard(entry: WidgetEntry, journeyLines: Int) {
+private fun WatcherCard(entry: WidgetEntry, journeyLines: Int, palette: ColorPalette, theme: WidgetTheme) {
     Box(modifier = GlanceModifier.padding(horizontal = 15.dp)) {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(GlanceTheme.colors.surfaceVariant)
+                .background(innerCardBackground(palette, theme))
                 .roundedCorners(18.dp)
                 .clickable(actionStartActivity<MainActivity>())
                 .padding(vertical = 12.dp, horizontal = 13.dp),
         ) {
-            Text(
-                text = entry.name,
-                style = TextStyle(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                    color = GlanceTheme.colors.onSurface,
-                ),
-                maxLines = 1,
-            )
-            Spacer(modifier = GlanceModifier.height(6.dp))
-            Text(
-                text = entry.connectionLine,
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    color = GlanceTheme.colors.onSurfaceVariant,
-                ),
-                maxLines = journeyLines,
-            )
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = GlanceModifier
+                        .size(30.dp)
+                        .background(GlanceTheme.colors.primaryContainer)
+                        .roundedCorners(10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        provider = ImageProvider(widgetIcon(entry.icon)),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimaryContainer),
+                        modifier = GlanceModifier.size(17.dp),
+                    )
+                }
+                Spacer(modifier = GlanceModifier.width(9.dp))
+                Text(
+                    text = entry.name,
+                    style = TextStyle(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                        color = GlanceTheme.colors.onSurface,
+                    ),
+                    maxLines = 1,
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+                val journey = entry.journey
+                if (journey != null) {
+                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    DurationBadge(minutes = journey.durationMinutes)
+                }
+            }
+            Spacer(modifier = GlanceModifier.height(11.dp))
+            val journey = entry.journey
+            if (journey == null) {
+                Text(
+                    text = entry.connectionLine,
+                    style = TextStyle(
+                        fontSize = 12.sp,
+                        color = GlanceTheme.colors.onSurfaceVariant,
+                    ),
+                    maxLines = journeyLines,
+                )
+            } else {
+                JourneyRow(journey = journey)
+            }
         }
     }
+}
+
+/** The loudest thing on the page, as in the app's cards. */
+@Composable
+private fun DurationBadge(minutes: Int) {
+    Box(
+        modifier = GlanceModifier
+            .background(GlanceTheme.colors.primary)
+            .roundedCorners(999.dp)
+            .padding(horizontal = 9.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = "$minutes min",
+            style = TextStyle(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = GlanceTheme.colors.onPrimary,
+            ),
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Times on the outside, chips between. Glance has no absolute positioning, so
+ * the rail is drawn as short segments either side of each chip rather than one
+ * continuous line behind them.
+ */
+@Composable
+private fun JourneyRow(journey: WidgetJourney) {
+    Row(
+        modifier = GlanceModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        journey.stops.forEachIndexed { index, stop ->
+            val isLast = index == journey.stops.lastIndex
+            StopColumn(
+                stop = stop,
+                isLast = isLast,
+                alignEnd = isLast,
+            )
+            journey.legs.getOrNull(index)?.let { leg ->
+                Box(
+                    modifier = GlanceModifier.defaultWeight().padding(top = 2.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LegChip(leg = leg)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StopColumn(stop: WidgetStop, isLast: Boolean, alignEnd: Boolean) {
+    Column(
+        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
+    ) {
+        Text(
+            text = stop.time,
+            style = TextStyle(
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isLast) {
+                    GlanceTheme.colors.tertiary
+                } else {
+                    GlanceTheme.colors.onSurface
+                },
+            ),
+            maxLines = 1,
+        )
+        Text(
+            text = if (isLast) "arrive" else stop.name,
+            style = TextStyle(
+                fontSize = 10.sp,
+                color = GlanceTheme.colors.onSurfaceVariant,
+            ),
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun LegChip(leg: WidgetLeg) {
+    Row(
+        modifier = GlanceModifier
+            .background(GlanceTheme.colors.surfaceVariant)
+            .roundedCorners(999.dp)
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(
+            provider = ImageProvider(vehicleGlyph(leg.vehicleType)),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+            modifier = GlanceModifier.size(11.dp),
+        )
+        Spacer(modifier = GlanceModifier.width(2.dp))
+        Text(
+            text = leg.lineCode,
+            style = TextStyle(
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Medium,
+                color = GlanceTheme.colors.onSurface,
+            ),
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Resource twin of [com.neddy.ketch.ui.components.watcherIconCatalog]. Glance
+ * renders in a remote process and can only take drawable resources, so the
+ * app's Compose icons cannot be reused directly.
+ */
+private fun widgetIcon(key: String): Int = when (key) {
+    "bus" -> R.drawable.ic_vehicle_bus
+    "tram" -> R.drawable.ic_vehicle_tram
+    "home" -> R.drawable.ic_watcher_home
+    "work" -> R.drawable.ic_watcher_work
+    "school" -> R.drawable.ic_watcher_school
+    "shopping" -> R.drawable.ic_watcher_shopping
+    "gym" -> R.drawable.ic_watcher_gym
+    "star" -> R.drawable.ic_watcher_star
+    "favorite" -> R.drawable.ic_watcher_favorite
+    else -> R.drawable.ic_vehicle_rail
+}
+
+private fun vehicleGlyph(vehicleType: String): Int = when (vehicleType.uppercase()) {
+    "HEAVY_RAIL", "COMMUTER_TRAIN", "HIGH_SPEED_TRAIN", "LONG_DISTANCE_TRAIN", "RAIL" ->
+        R.drawable.ic_vehicle_rail
+    "SUBWAY", "METRO_RAIL" -> R.drawable.ic_vehicle_subway
+    "TRAM", "LIGHT_RAIL" -> R.drawable.ic_vehicle_tram
+    else -> R.drawable.ic_vehicle_bus
 }
 
 /**
@@ -341,20 +550,25 @@ private fun PagerArrow(icon: Int, description: String, step: Int) {
 
 @Composable
 private fun PagerDot(index: Int, active: Boolean) {
+    // The active page reads as a short pill, the rest as dots.
     Box(
         modifier = GlanceModifier
-            .padding(horizontal = 4.dp, vertical = 7.dp)
+            .padding(horizontal = 3.dp)
             .clickable(showPage(index)),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            provider = ImageProvider(R.drawable.ic_widget_dot),
-            contentDescription = "Connection ${index + 1}",
-            colorFilter = ColorFilter.tint(
-                if (active) GlanceTheme.colors.primary else GlanceTheme.colors.outline,
-            ),
-            modifier = GlanceModifier.size(if (active) 8.dp else 6.dp),
-        )
+        Box(
+            modifier = GlanceModifier
+                .size(width = if (active) 16.dp else 6.dp, height = 6.dp)
+                .background(
+                    if (active) {
+                        GlanceTheme.colors.primary
+                    } else {
+                        GlanceTheme.colors.surfaceVariant
+                    },
+                )
+                .roundedCorners(3.dp),
+        ) {}
     }
 }
 

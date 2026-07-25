@@ -111,9 +111,11 @@ Connections read left-to-right like a departure board:
   draws a 2dp `outlineVariant` rail with a **line-code chip** riding it: pill, card-colored
   fill (punches out the rail), 1dp `outlineVariant` border, 13dp transport icon in primary +
   code at 10sp/600.
-- **Vertical timeline** (3+ legs): stops on the left (time 14sp/700, stop 10sp), 9dp primary
-  node dots on a 2dp rail with card-color halos, leg chips to the right of the rail. Final
-  time, tick and dot in **tertiary**.
+- **Vertical timeline** (3+ legs): a `1fr | 22dp | 1fr` grid with the **rail on the card's
+  centre line**. Times and stops pin right in the left half (time 15sp/700 tabular, stop
+  10.5sp), an 11dp node dot sits centred on the rail with a tick reaching it from the text, and
+  leg chips branch off to the right. The rail is inset half a row top and bottom so it starts
+  and ends inside the first and last dots. Final time, tick and dot in **tertiary**.
 - Card footer after a 1dp divider: `schedule` 16dp + "Arrives HH:MM", then `sync_alt` +
   "n transfer(s)" or `trending_flat` + "Direct", 12.5sp onSurfaceVariant.
 - The **duration pill** (primary fill, `schedule` 15dp + "NN min", 5×11dp padding) is the
@@ -136,11 +138,23 @@ Connections read left-to-right like a departure board:
   away. "Show resting" toggles inline with the menu staying open.
 - Resting watchers (enabled, outside their window) drop to 70% opacity and **sort below active
   ones**, each group keeping the user's own order.
-- **Modes swap the app bar, not the layout**: reorder & multi-select promote a contextual
-  top bar (close + title/count + action) so the list stays put. Multi-select bar is
-  secondaryContainer edge-to-edge; selected rows invert to primaryContainer with primary
-  `check_circle`; delete confirm is a bottom error button stating its count ("Delete 2
-  watchers").
+- **Modes swap the app bar, not the layout**: reorder and multi-select promote a **floating
+  pill** on surfaceContainerHigh (40dp surfaceContainer close circle + title/count + action),
+  not an edge-to-edge band, so entering a mode reads as one surface morphing.
+- **Reorder**: rows collapse to a single 24dp row each — `drag_handle` in outline, 36dp icon
+  tile, name over "NN min · HH:MM → HH:MM" — so a five-watcher list stays visible while
+  dragging. The lifted card goes to surfaceContainerHighest with a 2dp primary outline, a
+  shadow, 1.03 scale, a primary handle and tile, and reads "Dragging · position N of M"; the
+  slot it will drop into shows as a dashed outline over a primary @8% wash. The bar's action is
+  a filled primary **Done** pill, and a `swipe_vertical` chip at the bottom says the order
+  saves on drop.
+- **Multi-select**: selected rows take a **secondaryContainer** tint with a 2dp primary
+  outline, a 22dp square checkbox (7dp radius, filled primary with a check) and an icon tile
+  that flips to surfaceContainerLowest with a primary glyph. The bar carries a live count in
+  tabular figures, `select_all`, and a filled **error** circle — the only place error appears at
+  full strength. Delete confirm is a bottom error pill stating its count ("Delete 2 watchers")
+  over "Undo stays available for 5 s", and deleting posts a snackbar held open for exactly that
+  long rather than asking first.
 - Loading: shimmer skeleton cards (1.3s linear) + spinning `progress_activity` in the
   subtitle slot ("Finding connections…").
 - Empty: 104dp `alt_route` primaryContainer tile, "No watchers yet" 22sp/700, body copy,
@@ -224,10 +238,17 @@ Connections read left-to-right like a departure board:
   widget must lift off arbitrary wallpaper. It follows the **app's palette** (Glance renders
   outside the app's composition, so wallpaper palettes fall back to the default seed). Header: 34dp primary logo tile (`sailing`) that opens the widget
   configuration, "Ketch" 14sp/700, 32dp refresh circle.
-- **One connection owns the panel.** The watcher fills an 18dp-radius inner card — name
-  13sp/600 over the departure-board journey, one boarding per line — and the panel pages
-  between watchers: 28dp chevrons on the edges (wrapping around) with dot indicators between
-  them, active dot in primary, inactive in outline. Dots jump straight to a connection.
+- **One connection owns the panel.** The watcher fills an 18dp-radius inner card on
+  surfaceContainerHighest: an identity row (30dp primaryContainer tile, name 13sp/600, primary
+  **duration pill**) over the journey laid out as a departure board — times on the outside,
+  line chips riding between them, arrival in **tertiary** under an "arrive" label.
+- The panel pages between watchers with 28dp chevrons on the edges (wrapping around) and
+  indicators between them: the active page is a 16×6 primary pill, the rest 6dp dots, and each
+  jumps straight to its connection. *The spec shows swipe with dots only; RemoteViews has no
+  pager and cannot receive a swipe, so the chevrons are the navigation.*
+- Glance renders in a remote process and can only use drawable resources, so the watcher icons
+  and vehicle glyphs have resource twins under `res/drawable/ic_watcher_*` and `ic_vehicle_*`.
+  The header logo, notification glyph and adaptive icon are all the one Ketch mark.
 - The widget follows its resize (`SizeMode.Exact`): the wordmark drops below 200dp wide and the
   journey line count follows the available height.
 - The dark widget uses **fixed white / white-alpha text** so it stays legible on any

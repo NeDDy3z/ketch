@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -323,19 +324,19 @@ private fun LineChip(leg: TransitLeg, large: Boolean = false) {
 @Composable
 private fun VerticalTimeline(legs: List<TransitLeg>, zone: ZoneId) {
     Box(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .padding(start = 94.dp, top = 7.dp, bottom = 7.dp),
-        ) {
+        // The rail sits on the card's centre line: times pin to the left half,
+        // leg chips branch off the right. Inset top and bottom so it starts and
+        // ends inside the first and last node dots.
+        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(2.dp)
+                    .padding(vertical = NODE_ROW_HEIGHT / 2)
+                    .width(RAIL_WIDTH)
                     .background(MaterialTheme.colorScheme.outlineVariant),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column {
             TimelineNodeRow(
                 time = formatTime(legs.first().departureTime, zone),
                 stop = legs.first().departureStop,
@@ -353,6 +354,18 @@ private fun VerticalTimeline(legs: List<TransitLeg>, zone: ZoneId) {
     }
 }
 
+/** Width of the centre column the rail, dots and ticks share. */
+private val NODE_COLUMN_WIDTH = 22.dp
+private val NODE_ROW_HEIGHT = 34.dp
+private val LEG_ROW_HEIGHT = 30.dp
+private val RAIL_WIDTH = 2.dp
+private val NODE_DOT_SIZE = 11.dp
+
+/**
+ * A stop on the rail: time and stop name right-aligned in the left half, a tick
+ * reaching the centre line, and the node dot centred on it. The final stop turns
+ * tertiary — time, tick and dot — so "you're there" reads at a glance.
+ */
 @Composable
 private fun TimelineNodeRow(time: String, stop: String, isFinal: Boolean) {
     val accent = if (isFinal) {
@@ -370,67 +383,98 @@ private fun TimelineNodeRow(time: String, stop: String, isFinal: Boolean) {
     } else {
         MaterialTheme.colorScheme.primary
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            modifier = Modifier.width(80.dp),
-            horizontalAlignment = Alignment.End,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = NODE_ROW_HEIGHT),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = time,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = accent,
-                style = TabularNumbers,
-                maxLines = 1,
-            )
-            Text(
-                text = stop,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.End,
+            ) {
+                Text(
+                    text = time,
+                    fontSize = 15.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent,
+                    style = TabularNumbers,
+                    maxLines = 1,
+                )
+                Text(
+                    text = stop,
+                    fontSize = 10.5.sp,
+                    lineHeight = 12.6.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            // Half of the tick sits in the left column, half in the centre one,
+            // so together they meet the rail exactly under the dot.
+            Box(
+                modifier = Modifier
+                    .padding(start = 6.dp)
+                    .size(width = NODE_COLUMN_WIDTH / 2, height = RAIL_WIDTH)
+                    .background(tickColor),
             )
         }
-        // Tick leading into the rail at x = 95dp, node dot centered on it
-        // with a card-colored ring so the rail reads as passing behind.
-        Box(modifier = Modifier.size(width = 22.dp, height = 14.dp)) {
+        Box(
+            modifier = Modifier.width(NODE_COLUMN_WIDTH),
+            contentAlignment = Alignment.Center,
+        ) {
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .offset(x = 3.dp)
-                    .size(width = 12.dp, height = 2.dp)
+                    .size(width = NODE_COLUMN_WIDTH / 2, height = RAIL_WIDTH)
                     .background(tickColor),
             )
             Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .offset(x = 8.dp)
-                    .size(13.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .background(dotColor, CircleShape),
-                )
-            }
+                    .size(NODE_DOT_SIZE)
+                    .background(dotColor, CircleShape),
+            )
         }
+        Spacer(modifier = Modifier.weight(1f))
     }
 }
 
+/** A leg between two stops: its line chip branches off the rail to the right. */
 @Composable
 private fun LegChipRow(leg: TransitLeg) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Spacer(modifier = Modifier.width(96.dp))
-        Box(
-            modifier = Modifier
-                .size(width = 16.dp, height = 2.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant),
-        )
-        LineChip(leg = leg, large = true)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = LEG_ROW_HEIGHT),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.width(NODE_COLUMN_WIDTH)) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(width = NODE_COLUMN_WIDTH / 2, height = RAIL_WIDTH)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+        }
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = NODE_COLUMN_WIDTH / 2, height = RAIL_WIDTH)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+            LineChip(leg = leg, large = true)
+        }
     }
 }
 

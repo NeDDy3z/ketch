@@ -72,6 +72,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     /** Serializes reorder writes so overlapping commits persist in order. */
     private val reorderMutex = Mutex()
 
+    /** The most recent deletion, held for the lifetime of its undo snackbar. */
+    private var lastDeleted: List<Watcher> = emptyList()
+
     init {
         // Follow the database so creating, editing, reordering, or deleting a
         // watcher updates the home screen without a manual refresh. The order
@@ -201,10 +204,27 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * Deletes immediately and keeps the rows aside so the snackbar can put them
+     * back — faster for the common case than a confirmation dialog, and still
+     * reversible. Saving restores the original ids and ordering, because the DAO
+     * insert replaces on conflict.
+     */
     fun delete(watchers: List<Watcher>) {
         if (watchers.isEmpty()) return
+        lastDeleted = watchers
         viewModelScope.launch {
             watchers.forEach { container.watcherRepository.delete(it) }
+            container.triggerSyncRequester.requestSync()
+        }
+    }
+
+    fun undoDelete() {
+        val restoring = lastDeleted
+        if (restoring.isEmpty()) return
+        lastDeleted = emptyList()
+        viewModelScope.launch {
+            restoring.forEach { container.watcherRepository.save(it) }
             container.triggerSyncRequester.requestSync()
         }
     }

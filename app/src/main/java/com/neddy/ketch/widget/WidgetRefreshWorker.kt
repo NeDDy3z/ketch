@@ -61,13 +61,16 @@ class WidgetRefreshWorker(
                     maxTravelDeltaMinutes = watcher.maxTravelDeltaMinutes,
                 )
                 if (best != null) {
-                    // One boarding per line: a connection owns a whole widget
-                    // page, so it reads like a departure board.
+                    // The widget lays the journey out itself, so it gets the
+                    // stops and legs flattened rather than a prose block.
+                    WidgetPrefs.setJourney(context, watcherId, best.toWidgetJourney())
                     ConnectionFormatter.notificationBigText(best)
                 } else {
+                    WidgetPrefs.setJourney(context, watcherId, null)
                     "No connection found"
                 }
             } catch (e: Exception) {
+                WidgetPrefs.setJourney(context, watcherId, null)
                 "Lookup failed"
             }
             WidgetPrefs.setConnectionLine(context, watcherId, line)

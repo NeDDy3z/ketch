@@ -83,4 +83,22 @@ object WidgetPrefs {
 
     fun connectionLine(context: Context, watcherId: Long): String? =
         prefs(context).getString("line_$watcherId", null)
+
+    /**
+     * The last journey found for a watcher, flattened so the widget can lay it
+     * out as a departure board instead of a paragraph. Glance re-reads this on
+     * every render, so it stays a plain string rather than a parsed object.
+     */
+    fun setJourney(context: Context, watcherId: Long, journey: WidgetJourney?) {
+        prefs(context).edit {
+            if (journey == null) {
+                remove("journey_$watcherId")
+            } else {
+                putString("journey_$watcherId", journey.serialize())
+            }
+        }
+    }
+
+    fun journey(context: Context, watcherId: Long): WidgetJourney? =
+        prefs(context).getString("journey_$watcherId", null)?.let(WidgetJourney::parse)
 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget watcher-icon glyph. Glance needs drawable resources, so the app's
+     Compose Material icons have a resource twin here. Tinted at usage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp" android:height="24dp"
+        android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="@android:color/white" android:fillType="evenOdd"
+        android:pathData="M2,10h2v4H2v-4Zm3,-2h3v8H5V8Zm11,0h3v8h-3V8Zm4,2h2v4h-2v-4ZM9,11h6v2H9v-2Z" />
+</vector>

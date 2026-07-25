@@ -5,7 +5,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,9 +37,11 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AltRoute
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -44,7 +49,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwipeVertical
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
@@ -62,6 +69,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -71,6 +82,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,6 +102,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -105,12 +118,21 @@ import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
 import com.neddy.ketch.ui.components.WatcherCardHeader
 import com.neddy.ketch.ui.components.watcherIcon
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private enum class HomeMode { NORMAL, REORDER, DELETE }
 
 private val REORDER_ROW_HEIGHT = 68.dp
+private val REORDER_ROW_RADIUS = 24.dp
+
+/** How long the delete snackbar keeps undo available. */
+private const val UNDO_WINDOW_MS = 5_000L
 private val LIST_SPACING = 12.dp
+
+private val TabularNumbers = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
 
 private val windowTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -139,16 +161,40 @@ fun HomeScreen(
         selected = emptySet()
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     fun deleteSelected() {
         val toDelete = state.watcherConnections
             .filter { it.watcher.id in selected }
             .map { it.watcher }
+        if (toDelete.isEmpty()) return
         viewModel.delete(toDelete)
         exitMode()
+        scope.launch {
+            // Held open for exactly the five seconds the delete bar promises,
+            // rather than the built-in durations either side of it.
+            val timeout = launch {
+                delay(UNDO_WINDOW_MS)
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
+            val result = snackbarHostState.showSnackbar(
+                message = if (toDelete.size == 1) {
+                    "1 watcher deleted"
+                } else {
+                    "${toDelete.size} watchers deleted"
+                },
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Indefinite,
+            )
+            timeout.cancel()
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete()
+        }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             when (mode) {
                 HomeMode.NORMAL -> HomeHeader(
@@ -168,6 +214,10 @@ fun HomeScreen(
                 HomeMode.DELETE -> DeleteTopBar(
                     count = selected.size,
                     onClose = { exitMode() },
+                    onSelectAll = {
+                        val all = state.watcherConnections.map { it.watcher.id }.toSet()
+                        selected = if (selected == all) emptySet() else all
+                    },
                     onDelete = { deleteSelected() },
                 )
             }
@@ -190,8 +240,13 @@ fun HomeScreen(
             }
         },
         bottomBar = {
-            if (mode == HomeMode.DELETE) {
-                DeleteBar(count = selected.size, onDelete = { deleteSelected() })
+            when (mode) {
+                HomeMode.DELETE -> DeleteBar(
+                    count = selected.size,
+                    onDelete = { deleteSelected() },
+                )
+                HomeMode.REORDER -> ReorderHint()
+                HomeMode.NORMAL -> Unit
             }
         },
     ) { padding ->
@@ -414,71 +469,123 @@ private fun ToolsMenu(
     }
 }
 
+/**
+ * Contextual bars for reorder and multi-select ride as a floating pill on
+ * surface-container-high rather than an edge-to-edge band, so entering a mode
+ * reads as one surface morphing instead of a navigation push.
+ */
 @Composable
-private fun ReorderTopBar(onClose: () -> Unit, onDone: () -> Unit) {
-    Row(
-        modifier = Modifier
+private fun ContextualBar(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
     ) {
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier.size(40.dp),
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Cancel")
+            Row(
+                modifier = Modifier.padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = content,
+            )
         }
-        Text(
-            text = "Reorder",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onDone) {
-            Text(
-                text = "Done",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
+    }
+}
+
+/** The circular close affordance that exits a contextual mode. */
+@Composable
+private fun BarCloseButton(onClose: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.size(40.dp),
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Cancel",
+                modifier = Modifier.size(21.dp),
             )
         }
     }
 }
 
 @Composable
-private fun DeleteTopBar(count: Int, onClose: () -> Unit, onDelete: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Row(
+private fun ReorderTopBar(onClose: () -> Unit, onDone: () -> Unit) {
+    ContextualBar {
+        BarCloseButton(onClose = onClose)
+        Text(
+            text = "Reorder",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .weight(1f)
+                .padding(start = 2.dp),
+        )
+        Button(
+            onClick = onDone,
+            shape = CircleShape,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
         ) {
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = "Cancel")
-            }
             Text(
-                text = "$count selected",
-                fontSize = 20.sp,
+                text = "Done",
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
             )
-            IconButton(
-                onClick = onDelete,
-                enabled = count > 0,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete selected")
+        }
+    }
+}
+
+@Composable
+private fun DeleteTopBar(
+    count: Int,
+    onClose: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    ContextualBar {
+        BarCloseButton(onClose = onClose)
+        Text(
+            text = "$count selected",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            style = TabularNumbers,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 4.dp),
+        )
+        IconButton(onClick = onSelectAll, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Filled.SelectAll,
+                contentDescription = "Select all",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(21.dp),
+            )
+        }
+        // The only place error appears at full strength.
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+            modifier = Modifier.size(40.dp),
+        ) {
+            IconButton(onClick = onDelete, enabled = count > 0) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = "Delete selected",
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
@@ -486,18 +593,23 @@ private fun DeleteTopBar(count: Int, onClose: () -> Unit, onDelete: () -> Unit) 
 
 @Composable
 private fun DeleteBar(count: Int, onDelete: () -> Unit) {
-    Box(modifier = Modifier.navigationBarsPadding()) {
+    Column(
+        modifier = Modifier
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Button(
             onClick = onDelete,
             enabled = count > 0,
-            shape = RoundedCornerShape(18.dp),
+            shape = CircleShape,
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError,
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp)
                 .height(54.dp),
         ) {
             Icon(
@@ -505,7 +617,7 @@ private fun DeleteBar(count: Int, onDelete: () -> Unit) {
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(9.dp))
             Text(
                 text = when (count) {
                     0 -> "Delete watchers"
@@ -516,6 +628,12 @@ private fun DeleteBar(count: Int, onDelete: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
             )
         }
+        // Deleting acts immediately and is undoable, rather than asking first.
+        Text(
+            text = "Undo stays available for 5 s",
+            fontSize = 11.5.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -722,26 +840,66 @@ private fun ReorderList(
     ) {
         itemsIndexed(list, key = { _, item -> item.watcher.id }) { index, item ->
             val isDragging = draggingId == item.watcher.id
-            Surface(
-                shape = MaterialTheme.shapes.large,
-                color = if (isDragging) {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainer
-                },
-                shadowElevation = if (isDragging) 8.dp else 0.dp,
+            val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+            val dropHint = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(REORDER_ROW_HEIGHT)
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragging) accumulated else 0f
-                        val scale = if (isDragging) 1.03f else 1f
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = if (isDragging) 1f else 0.8f
-                    },
+                    .zIndex(if (isDragging) 1f else 0f),
             ) {
+                // The slot the card will drop into, shown as a dashed outline
+                // while the lifted card floats away from it.
+                if (isDragging) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                val inset = 1.dp.toPx()
+                                drawRoundRect(
+                                    color = dropHint,
+                                    cornerRadius = CornerRadius(REORDER_ROW_RADIUS.toPx()),
+                                )
+                                drawRoundRect(
+                                    color = outlineVariant,
+                                    topLeft = Offset(inset, inset),
+                                    size = Size(
+                                        size.width - inset * 2,
+                                        size.height - inset * 2,
+                                    ),
+                                    cornerRadius = CornerRadius(REORDER_ROW_RADIUS.toPx()),
+                                    style = Stroke(
+                                        width = 2.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(
+                                            floatArrayOf(8.dp.toPx(), 6.dp.toPx()),
+                                        ),
+                                    ),
+                                )
+                            },
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(REORDER_ROW_RADIUS),
+                    color = if (isDragging) {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainer
+                    },
+                    shadowElevation = if (isDragging) 16.dp else 0.dp,
+                    border = if (isDragging) {
+                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    } else {
+                        null
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationY = if (isDragging) accumulated else 0f
+                            val scale = if (isDragging) 1.03f else 1f
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                ) {
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
@@ -750,11 +908,15 @@ private fun ReorderList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.DragIndicator,
+                        imageVector = Icons.Filled.DragHandle,
                         contentDescription = "Drag to reorder",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isDragging) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
                         modifier = Modifier
-                            .size(24.dp)
+                            .size(22.dp)
                             .pointerInput(item.watcher.id, stepPx) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
@@ -796,11 +958,19 @@ private fun ReorderList(
                     )
                     IconTile(
                         icon = watcherIcon(item.watcher.icon),
-                        size = 40.dp,
-                        cornerRadius = 13.dp,
-                        background = MaterialTheme.colorScheme.primaryContainer,
-                        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        iconSize = 22.dp,
+                        size = 36.dp,
+                        cornerRadius = 12.dp,
+                        background = if (isDragging) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                        iconTint = if (isDragging) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                        iconSize = 20.dp,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -808,29 +978,54 @@ private fun ReorderList(
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = "To ${item.watcher.destination.name}",
+                            text = if (isDragging) {
+                                "Dragging · position ${index + 1} of ${list.size}"
+                            } else {
+                                rowSubtitle(item)
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    IconButton(
-                        onClick = { move(index, index - 1) },
-                        enabled = index > 0,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up")
-                    }
-                    IconButton(
-                        onClick = { move(index, index + 1) },
-                        enabled = index < list.lastIndex,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down")
-                    }
                 }
+                }
+            }
+        }
+    }
+}
+
+/** The hint that reorder saves itself, pinned above the navigation bar. */
+@Composable
+private fun ReorderHint(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SwipeVertical,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(text = "Drag to reorder · saves on drop", fontSize = 12.sp)
             }
         }
     }
@@ -851,16 +1046,23 @@ private fun DeleteList(
         itemsIndexed(items, key = { _, item -> item.watcher.id }) { _, item ->
             val checked = item.watcher.id in selected
             Surface(
-                shape = MaterialTheme.shapes.large,
+                shape = RoundedCornerShape(REORDER_ROW_RADIUS),
+                // Selection rides a secondary-container tint, not primary, so it
+                // never competes with the duration pill's voice.
                 color = if (checked) {
-                    MaterialTheme.colorScheme.primaryContainer
+                    MaterialTheme.colorScheme.secondaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceContainer
                 },
                 contentColor = if (checked) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurface
+                },
+                border = if (checked) {
+                    BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                } else {
+                    null
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -869,61 +1071,98 @@ private fun DeleteList(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(horizontal = 14.dp, vertical = 13.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = if (checked) {
-                            Icons.Filled.CheckCircle
-                        } else {
-                            Icons.Filled.RadioButtonUnchecked
-                        },
-                        contentDescription = if (checked) "Selected" else "Not selected",
-                        tint = if (checked) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                        modifier = Modifier.size(24.dp),
-                    )
+                    SelectionBox(checked = checked)
                     IconTile(
                         icon = watcherIcon(item.watcher.icon),
-                        size = 40.dp,
-                        cornerRadius = 13.dp,
+                        size = 38.dp,
+                        cornerRadius = 12.dp,
                         background = if (checked) {
-                            MaterialTheme.colorScheme.primary
+                            MaterialTheme.colorScheme.surfaceContainerLowest
                         } else {
                             MaterialTheme.colorScheme.primaryContainer
                         },
                         iconTint = if (checked) {
-                            MaterialTheme.colorScheme.onPrimary
+                            MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         },
-                        iconSize = 22.dp,
+                        iconSize = 21.dp,
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = item.watcher.name,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = "To ${item.watcher.destination.name}",
+                            text = rowSubtitle(item),
                             fontSize = 12.sp,
                             color = if (checked) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f)
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
         }
     }
+}
+
+/** The square checkbox on a multi-select row. */
+@Composable
+private fun SelectionBox(checked: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .then(
+                if (checked) {
+                    Modifier.background(
+                        MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(7.dp),
+                    )
+                } else {
+                    Modifier.border(
+                        2.dp,
+                        MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(7.dp),
+                    )
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The one-line summary a collapsed row carries: duration and the journey's two
+ * ends once a connection has resolved, the destination until then.
+ */
+private fun rowSubtitle(item: WatcherConnection): String {
+    val connection = item.connection ?: return "To ${item.watcher.destination.name}"
+    val zone = ZoneId.systemDefault()
+    val departure = windowTimeFormatter.format(
+        connection.legs.first().departureTime.atZone(zone),
+    )
+    val arrival = windowTimeFormatter.format(connection.legs.last().arrivalTime.atZone(zone))
+    return "${connection.travelDuration.toMinutes()} min · $departure → $arrival"
 }
 
 /** Small rounded icon tile used by the list rows. */
