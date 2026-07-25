@@ -3,6 +3,7 @@ package com.neddy.ketch.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -13,7 +14,28 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-enum class ThemeMode { SYSTEM, LIGHT, DARK }
+/**
+ * The dark tonal palette the whole app is tinted from. Ketch is dark-only, so
+ * this replaces a light/dark choice entirely. [WALLPAPER] is the shipping
+ * default on Android 12+ and takes its tones from the user's home screen; the
+ * fixed seeds are the fallbacks, and guarantee a duration pill that survives a
+ * pale wallpaper.
+ */
+enum class ColorPalette {
+    WALLPAPER,
+    STEEL,
+    AURORA,
+    PHOSPHOR,
+    ICE_VIOLET,
+    GRAPHITE,
+    AMBER,
+    MONO,
+    ;
+
+    companion object {
+        val DEFAULT = STEEL
+    }
+}
 
 /** How a home item is opened for editing: a single tap or a long press. */
 enum class EditGesture { TAP, HOLD }
@@ -38,10 +60,12 @@ data class WatcherDefaults(
 )
 
 data class AppSettings(
-    val themeMode: ThemeMode,
+    val palette: ColorPalette,
     val apiKey: String,
     val editGesture: EditGesture,
+    val doubleTapOpensMaps: Boolean,
     val refreshScope: RefreshScope,
+    val showResting: Boolean,
     val watcherDefaults: WatcherDefaults,
 )
 
@@ -50,10 +74,12 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class SettingsRepository(private val context: Context) {
 
     private object Keys {
-        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val PALETTE = stringPreferencesKey("color_palette")
         val API_KEY = stringPreferencesKey("api_key")
         val EDIT_GESTURE = stringPreferencesKey("edit_gesture")
+        val DOUBLE_TAP_MAPS = booleanPreferencesKey("double_tap_opens_maps")
         val REFRESH_SCOPE = stringPreferencesKey("refresh_scope")
+        val SHOW_RESTING = booleanPreferencesKey("show_resting")
         val DEFAULT_DAYS = stringPreferencesKey("default_days")
         val DEFAULT_WINDOW_START = intPreferencesKey("default_window_start")
         val DEFAULT_WINDOW_END = intPreferencesKey("default_window_end")
@@ -64,16 +90,18 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
-            themeMode = prefs[Keys.THEME_MODE]
-                ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
-                ?: ThemeMode.SYSTEM,
+            palette = prefs[Keys.PALETTE]
+                ?.let { runCatching { ColorPalette.valueOf(it) }.getOrNull() }
+                ?: ColorPalette.DEFAULT,
             apiKey = effectiveApiKey(prefs[Keys.API_KEY]),
             editGesture = prefs[Keys.EDIT_GESTURE]
                 ?.let { runCatching { EditGesture.valueOf(it) }.getOrNull() }
                 ?: EditGesture.TAP,
+            doubleTapOpensMaps = prefs[Keys.DOUBLE_TAP_MAPS] ?: true,
             refreshScope = prefs[Keys.REFRESH_SCOPE]
                 ?.let { runCatching { RefreshScope.valueOf(it) }.getOrNull() }
                 ?: RefreshScope.ALL,
+            showResting = prefs[Keys.SHOW_RESTING] ?: true,
             watcherDefaults = WatcherDefaults(
                 activeDays = prefs[Keys.DEFAULT_DAYS]
                     ?.split(',')
@@ -92,8 +120,8 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun current(): AppSettings = settings.first()
 
-    suspend fun setThemeMode(mode: ThemeMode) {
-        context.dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    suspend fun setPalette(palette: ColorPalette) {
+        context.dataStore.edit { it[Keys.PALETTE] = palette.name }
     }
 
     suspend fun setApiKey(key: String) {
@@ -104,8 +132,16 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.EDIT_GESTURE] = gesture.name }
     }
 
+    suspend fun setDoubleTapOpensMaps(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DOUBLE_TAP_MAPS] = enabled }
+    }
+
     suspend fun setRefreshScope(scope: RefreshScope) {
         context.dataStore.edit { it[Keys.REFRESH_SCOPE] = scope.name }
+    }
+
+    suspend fun setShowResting(show: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_RESTING] = show }
     }
 
     suspend fun setWatcherDefaults(defaults: WatcherDefaults) {

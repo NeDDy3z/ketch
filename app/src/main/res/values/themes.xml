@@ -7,8 +7,14 @@
         <item name="postSplashScreenTheme">@style/Theme.Ketch.Main</item>
     </style>
 
-    <style name="Theme.Ketch.Main" parent="android:Theme.DeviceDefault.DayNight">
+    <!--
+      Ketch is dark-only (docs/design_document.md §1), so the window theme is
+      pinned dark rather than DayNight: on a light-mode device a DayNight parent
+      flashes a white window before Compose draws the first dark frame.
+    -->
+    <style name="Theme.Ketch.Main" parent="android:Theme.DeviceDefault">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 </resources>

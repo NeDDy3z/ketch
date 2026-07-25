@@ -1,42 +1,58 @@
 # Ketch design guidelines — Material 3 Expressive
 
 Source of truth for the app's visual language, distilled from the *Ketch M3 Redesign* canvas
-(claude.ai/design project). Every surface uses a full M3 tonal scheme built on a warm amber
-"departure board" seed: dynamic-color roles, tonal surfaces instead of shadows, one rounded
-shape family, an 8dp spacing rhythm and emphasized type.
+(claude.ai/design project). Every surface uses a full M3 tonal scheme: dynamic-color roles,
+tonal surfaces instead of shadows, one rounded shape family, an 8dp spacing rhythm and
+emphasized type.
 
 ## 1. Color
 
-Fixed brand scheme — **dynamic color is intentionally off** so the amber palette shows on all
-devices. Tokens live in `ui/theme/Color.kt` (`LightColors` / `DarkColors`).
+**Eight dark seeds, one tonal system.** Ketch is **dark-only**. A seed overrides colour *roles
+only*: shape, elevation, type and spacing are identical across all eight, so a new seed ships
+without re-checking a single layout. Every screen reads the same roles.
 
-| Role | Light | Dark |
-|---|---|---|
-| primary / onPrimary | `#8A5100` / `#FFFFFF` | `#FFB868` / `#4A2800` |
-| primaryContainer / on | `#FFDCBE` / `#2C1600` | `#693C00` / `#FFDCBE` |
-| secondary / onSecondary | `#755846` / `#FFFFFF` | `#E4BFA6` / `#432B1B` |
-| secondaryContainer / on | `#FFDCBE` / `#2A1707` | `#5B4130` / `#FFDCBE` |
-| tertiary / onTertiary | `#59633A` / `#FFFFFF` | `#C1CC9A` / `#2B3410` |
-| tertiaryContainer / on | `#DDE8B4` / `#171F02` | `#414B24` / `#DDE8B4` |
-| error / onError | `#BA1A1A` / `#FFFFFF` | `#FFB4AB` / `#690005` |
-| errorContainer / on | `#FFDAD6` / `#410002` | `#93000A` / `#FFDAD6` |
-| surface & background / on | `#FFF8F4` / `#211A14` | `#19120C` / `#EEE0D4` |
-| onSurfaceVariant | `#51443B` | `#D6C5B6` |
-| surfaceContainerLowest | `#FFFFFF` | `#130D07` |
-| surfaceContainerLow | `#FEF1E8` | `#211A13` |
-| surfaceContainer | `#FBEBDF` | `#251E17` |
-| surfaceContainerHigh | `#F5E5DA` | `#302821` |
-| surfaceContainerHighest | `#EFE0D4` | `#3B322B` |
-| outline / outlineVariant | `#84766A` / `#D6C5B6` | `#9F8F80` / `#51443B` |
-| inverseSurface / inverseOn / inversePrimary | `#372F27` / `#FDEEE2` / `#FFB868` | `#EEE0D4` / `#372F27` / `#8A5100` |
+Tokens live in `ui/theme/Color.kt`; the choice is persisted as `ColorPalette` and applied by
+`KetchTheme`, which cross-fades roles over 200ms so switching needs no restart.
+
+| Palette | Identity | primary | tertiary | surface | surfaceContainer |
+|---|---|---|---|---|---|
+| `WALLPAPER` | Material You — reads the wallpaper (API 31+, falls back to Steel) | — | — | — | — |
+| `STEEL` **(default)** | Night Platform · cold steel blue | `#8ECDFF` | `#7FD6C4` | `#0E1418` | `#182027` |
+| `AURORA` | Indigo periwinkle · teal arrivals | `#BEC5FF` | `#8FD7D2` | `#121318` | `#1E1F25` |
+| `PHOSPHOR` | Departure-board green · ice blue | `#7CE0A6` | `#A2CEDD` | `#0D1310` | `#171E19` |
+| `ICE_VIOLET` | Cool lilac · mint arrivals | `#D9BDFF` | `#8AD5C6` | `#141218` | `#201E25` |
+| `GRAPHITE` | Neutral graphite · electric cyan | `#5FE0E6` | `#C6D0D6` | `#0F1112` | `#1A1D1E` |
+| `AMBER` | Departure Board · warm amber, olive arrivals | `#FFB868` | `#C1CC9A` | `#19120C` | `#251E17` |
+| `MONO` | True Black · greys only, AMOLED | `#E8E8E8` | `#FFFFFF` | `#000000` | `#121212` |
+
+Every palette shares one error set — destructive actions read the same everywhere:
+`error #FFB4AB` / `onError #690005` / `errorContainer #93000A` / `onErrorContainer #FFDAD6`.
+`surfaceVariant` follows each seed's `outlineVariant`. See `Color.kt` for the full role set.
+
+**The one light exception.** The home-screen widget may be asked to sit on a bright wallpaper,
+so `lightCounterpart()` renders a seed light. Nothing there is invented: it reads the light
+roles back out of the dark scheme using M3's tonal symmetry — a dark `inversePrimary` *is* the
+light primary (T40), a dark `onPrimaryContainer` (T90) is the light `primaryContainer`, and
+`inverseSurface` / `inverseOnSurface` are the light surface and its text. The amber seed's
+original light scheme confirms the mapping exactly.
+
+**Why fixed seeds at all.** Material You is the natural default, but a departure board is read
+at a glance in bad light: the fixed seeds guarantee a duration pill that survives a pale
+wallpaper, and True Black exists for AMOLED lock-screen glances at night.
+
+Map tiles sit outside the M3 role set. Each palette carries `KetchMapColors`
+(land / line / road / water); wallpaper palettes derive theirs from the live scheme. The map
+picker builds its Google Maps style JSON from these (`ui/theme/MapStyle.kt`) rather than a
+fixed raw resource, so the tiles re-tint with the rest of the app.
 
 ### Semantic accent logic
 
 - **primary** — the loudest voice, used sparingly: the duration pill, active selections
   (selected icon tile, day circles, switches, radio dots), section index headers, the pin and
   radius on the map, links.
-- **tertiary** (olive) — "you're there": arrival times, the arrival dot/tick on timelines, the
-  healthy `check_circle`, destination affordances. It never competes with primary.
+- **tertiary** — "you're there": arrival times, the arrival dot/tick on timelines, the healthy
+  `check_circle`, destination affordances. Every seed pitches it away from primary (mint against
+  steel, teal against indigo, olive against amber) so the two never compete.
 - **secondaryContainer** — contextual tints: the permission banner, multi-select top bar,
   selected chips and segmented options.
 - **error** — destructive delete and invalid fields only. Nowhere else.
@@ -112,7 +128,14 @@ Connections read left-to-right like a departure board:
   list scrolls under it.
 - Watcher cards per §5. FAB 64dp / 20dp radius, primaryContainer, `add` 28dp.
 - Double tapping a card hands the route to Google Maps as public transport directions to the
-  watcher destination.
+  watcher destination, when the gesture is enabled in Settings → Gestures.
+- **The header menu is overflow, not a settings trip**: the four list-level actions (Refresh
+  all, Reorder, Show/Hide resting, Delete) sit above a divider, with Settings and Help below.
+  The header `sync` icon and pull-to-refresh follow the refresh-scope setting; **"Refresh all"
+  is the only way to poll resting watchers**, so the expensive sweep is one deliberate step
+  away. "Show resting" toggles inline with the menu staying open.
+- Resting watchers (enabled, outside their window) drop to 70% opacity and **sort below active
+  ones**, each group keeping the user's own order.
 - **Modes swap the app bar, not the layout**: reorder & multi-select promote a contextual
   top bar (close + title/count + action) so the list stays put. Multi-select bar is
   secondaryContainer edge-to-edge; selected rows invert to primaryContainer with primary
@@ -152,19 +175,44 @@ Connections read left-to-right like a departure board:
 ### Settings
 - Title 26sp/700. Group headers 13sp/700 **primary**, sitting above one rounded container
   per section (20dp); no loose full-width dividers — whitespace separates groups.
-- Theme picker is a true M3 segmented button (pill, secondaryContainer selection).
-- Radio groups: rows with `radio_button_checked` in primary / unchecked in outline; a
-  selected row with helper text carries a surfaceContainerHigh tint; helper text lives right
-  under the option it explains.
+- Every control applies immediately — there is no Save.
+- **Appearance** is a single "Color palette" row: `palette` icon, the active palette's name
+  and subtitle, the three tones that carry the UI (primary, tertiary, card surface) as
+  overlapping 22dp swatches, and a chevron. Helper beneath: "Ketch is dark-only — the palette
+  sets its tones."
+- **Palette picker** is a bottom sheet, not a page, so the change is visible behind it:
+  "Applies instantly · dark tones only", then one list with **Wallpaper first** (conic sweep of
+  the live dynamic tones + `wallpaper` glyph) followed by the seven fixed seeds, each previewed
+  by its own three tones. Selected row = surfaceContainerHigh + `radio_button_checked`.
+- **Gestures**: "Double-tap opens in Google Maps" switch with explanatory body copy. Turning it
+  off disables the home card's double-tap handoff.
+- Radio groups (Editing, Refresh): rows with `radio_button_checked` in primary / unchecked in
+  outline; a selected row carries a surfaceContainerHigh tint; helper text lives right under
+  the option it explains.
 - API key: masked monospace value with a `visibility` reveal affordance; helper below the card.
 - Defaults: same circular day chips (12sp) + Window / Radius value cards.
-- Footer: centered 12sp "Ketch vX.Y · Made by …" with the author link in primary.
+- **Support**: one row to Help & feedback ("FAQ, troubleshooting, report an issue").
+- Footer: centered 12sp "Ketch vX.Y" linking to the GitHub repo, in primary.
+
+### Help & feedback
+- **Answers first, contact second.** Search and the two getting-started cards sit above the
+  fold; the outbound rows come after the FAQ, so most questions resolve without writing to a
+  one-person dev team.
+- Search is a 52dp pill on surfaceContainer and **filters the FAQ as you type**; the
+  getting-started cards hide while filtering.
+- The two entry cards use **primaryContainer** and **tertiaryContainer** — the same pairing the
+  journey cards use for departure vs. arrival, so the palette stays legible across screens.
+- FAQ is one 20dp container; **only one answer stays expanded**, on surfaceContainerHigh with
+  its chevron in primary.
+- Outbound rows are marked `open_in_new` and hand off to GitHub — nothing is collected in-app.
 
 ### Map picker
-- Full-bleed themed map (light paper / dark ink styles). Floating 56dp pill search field
+- Full-bleed map styled from the active palette's map tokens — a desaturated ink palette so
+  the pin, ring and route read first. Floating 56dp pill search field
   (back arrow, query, 40dp primaryContainer search circle).
-- The pin (`location_on` 52dp), radius ring (2dp primary stroke, primary @ 16% fill), center
-  dot and "150 m" `radar` chip all speak **primary** and share one anchor.
+- The pin, radius ring (2dp primary stroke, primary @ 20% fill), center dot and "150 m" `radar`
+  chip all speak **primary** and share one anchor. The map pin is the stock marker recoloured to
+  the palette hue — the SDK's default red is reserved here for destructive actions.
 - 56dp / 18dp-radius my-location FAB above the sheet.
 - Bottom confirm sheet rounds only its top corners (28dp): drag handle, 44dp primaryContainer
   context tile (`trip_origin` / `place`), title + "address · leave radius N m" subtitle,
@@ -172,8 +220,9 @@ Connections read left-to-right like a departure board:
   the thumb zone.
 
 ### Widget (Glance)
-- Raised 26dp panel (surfaceContainerLow light / surfaceContainerHigh dark) — the one place
-  elevation is intentional. Header: 34dp primary logo tile (`sailing`) that opens the widget
+- Raised 26dp panel on surfaceContainerHigh — the one place elevation is intentional, since a
+  widget must lift off arbitrary wallpaper. It follows the **app's palette** (Glance renders
+  outside the app's composition, so wallpaper palettes fall back to the default seed). Header: 34dp primary logo tile (`sailing`) that opens the widget
   configuration, "Ketch" 14sp/700, 32dp refresh circle.
 - **One connection owns the panel.** The watcher fills an 18dp-radius inner card — name
   13sp/600 over the departure-board journey, one boarding per line — and the panel pages
@@ -183,11 +232,22 @@ Connections read left-to-right like a departure board:
   journey line count follows the available height.
 - The dark widget uses **fixed white / white-alpha text** so it stays legible on any
   wallpaper.
+- Widget configuration (reached by tapping the logo tile) picks which watchers page, plus a
+  **"Show only active"** switch: resting watchers are skipped in the pager until their window
+  opens, so a two-watcher evening cycles between two pages, not five.
+- **Widget theme** is a System / Light / Dark segmented control, independent of the app — the
+  one place a palette is rendered light (see §1). System hands both schemes to Glance; Light
+  and Dark pin it regardless of the device setting.
+- "Nothing picked" and "everything picked is resting" are different empty states and say so:
+  the second reads *"Every watcher is resting — the pager resumes when a window opens"* rather
+  than telling you to pick watchers you already picked.
 
 ### Notification
-- **Ketch owns the words, not the chrome.** Stock system notification: `setColor` = brand
-  primary tints the small icon; title = watcher name; body carries the whole decision —
-  departure, stop, line, arrival, transfers — expanded via BigTextStyle. Buttons, grouping,
+- **Ketch owns the words, not the chrome.** Stock system notification: `setColor` = the active
+  palette's primary tints the small icon; title = watcher name; body carries the whole decision
+  — `"16:00 Praha hl.n. (R41) 🚆 → arrives 17:00 · 1 transfer"`, plus a "leave within N min"
+  countdown when the departure is within the hour — expanded via BigTextStyle to one boarding
+  per line. Buttons, grouping,
   sound and heads-up priority come from the channel and OS.
 
 ## 7. Motion

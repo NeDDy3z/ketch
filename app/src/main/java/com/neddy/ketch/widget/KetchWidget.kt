@@ -47,8 +47,11 @@ import androidx.glance.text.TextStyle
 import com.neddy.ketch.MainActivity
 import com.neddy.ketch.R
 import com.neddy.ketch.appContainer
-import com.neddy.ketch.ui.theme.DarkColors
-import com.neddy.ketch.ui.theme.LightColors
+import com.neddy.ketch.data.settings.ColorPalette
+import com.neddy.ketch.domain.model.Watcher
+import com.neddy.ketch.ui.theme.lightCounterpart
+import com.neddy.ketch.ui.theme.paletteColors
+import java.time.LocalDateTime
 
 data class WidgetEntry(
     val watcherId: Long,
@@ -56,19 +59,54 @@ data class WidgetEntry(
     val connectionLine: String,
 )
 
-/** Day/night Glance providers mirroring the app's M3 scheme (docs/design_document.md). */
-private val WidgetColors = ColorProviders(light = LightColors, dark = DarkColors)
+/**
+ * The dark scheme behind a palette. Glance renders outside the app's
+ * composition, so wallpaper palettes have no dynamic tones to read here and
+ * fall back to the default seed.
+ */
+private fun widgetScheme(palette: ColorPalette) =
+    paletteColors(palette).scheme
+        ?: requireNotNull(paletteColors(ColorPalette.DEFAULT).scheme)
 
 /**
- * Panel tone: surfaceContainerLow in light / surfaceContainerHigh in dark.
- * glance-material3 1.1.1 does not expose the surfaceContainer* roles on
- * [GlanceTheme.colors], so this is a hand-built day/night provider using the
- * exact tones from the app color scheme.
+ * Glance providers for the palette, resolved through the widget's own theme.
+ * The app is dark-only, but a placed widget may need to sit lighter on a bright
+ * wallpaper, so [WidgetTheme.LIGHT] paints the palette's light counterpart and
+ * [WidgetTheme.SYSTEM] hands both to Glance to pick per the device setting.
  */
-private val PanelBackground = ColorProvider(
-    day = LightColors.surfaceContainerLow,
-    night = DarkColors.surfaceContainerHigh,
-)
+private fun widgetColors(palette: ColorPalette, theme: WidgetTheme) = run {
+    val dark = widgetScheme(palette)
+    val light = lightCounterpart(dark)
+    when (theme) {
+        WidgetTheme.SYSTEM -> ColorProviders(light = light, dark = dark)
+        WidgetTheme.LIGHT -> ColorProviders(light = light, dark = light)
+        WidgetTheme.DARK -> ColorProviders(light = dark, dark = dark)
+    }
+}
+
+/**
+ * Panel tone. glance-material3 1.1.1 does not expose the surfaceContainer*
+ * roles on [GlanceTheme.colors], so the raised panel takes its tone straight
+ * from the resolved scheme — a widget must lift off arbitrary wallpaper.
+ */
+private fun panelBackground(palette: ColorPalette, theme: WidgetTheme) = run {
+    val dark = widgetScheme(palette)
+    val light = lightCounterpart(dark)
+    when (theme) {
+        WidgetTheme.SYSTEM -> ColorProvider(
+            day = light.surfaceContainerHigh,
+            night = dark.surfaceContainerHigh,
+        )
+        WidgetTheme.LIGHT -> ColorProvider(
+            day = light.surfaceContainerHigh,
+            night = light.surfaceContainerHigh,
+        )
+        WidgetTheme.DARK -> ColorProvider(
+            day = dark.surfaceContainerHigh,
+            night = dark.surfaceContainerHigh,
+        )
+    }
+}
 
 /** Widget id carried to [WidgetConfigActivity] when opening it from the widget. */
 private val AppWidgetIdKey = ActionParameters.Key<Int>(AppWidgetManager.EXTRA_APPWIDGET_ID)
@@ -87,25 +125,36 @@ class KetchWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val watcherIds = WidgetPrefs.selectedWatchers(context, appWidgetId)
-        val repository = context.appContainer.watcherRepository
-        val entries = watcherIds.mapNotNull { watcherId ->
-            repository.getWatcher(watcherId)?.let { watcher ->
-                WidgetEntry(
-                    watcherId = watcherId,
-                    name = watcher.name,
-                    connectionLine = WidgetPrefs.connectionLine(context, watcherId)
-                        ?: "Loading...",
-                )
-            }
+        val palette = context.appContainer.settingsRepository.current().palette
+        val theme = WidgetPrefs.theme(context, appWidgetId)
+        // Resting watchers are skipped in the loop rather than shown empty, so
+        // a two-watcher evening cycles between two pages, not five.
+        val entries = pagedWatchers(context, appWidgetId).map { watcher ->
+            WidgetEntry(
+                watcherId = watcher.id,
+                name = watcher.name,
+                connectionLine = WidgetPrefs.connectionLine(context, watcher.id)
+                    ?: "Loading...",
+            )
         }
+        // "Nothing picked" and "everything picked is resting" are different
+        // states and must not share a message.
+        val allResting = entries.isEmpty() &&
+            WidgetPrefs.selectedWatchers(context, appWidgetId).isNotEmpty()
         // A watcher can disappear between two renders, so the stored page is
         // clamped instead of trusted.
         val page = WidgetPrefs.page(context, appWidgetId)
             .coerceIn(0, maxOf(0, entries.lastIndex))
         provideContent {
-            GlanceTheme(colors = WidgetColors) {
-                WidgetContent(appWidgetId = appWidgetId, entries = entries, page = page)
+            GlanceTheme(colors = widgetColors(palette, theme)) {
+                WidgetContent(
+                    appWidgetId = appWidgetId,
+                    entries = entries,
+                    page = page,
+                    palette = palette,
+                    theme = theme,
+                    allResting = allResting,
+                )
             }
         }
     }
@@ -123,12 +172,19 @@ private fun journeyLines(size: DpSize): Int =
     ((size.height - 104.dp) / 17.dp).toInt().coerceIn(1, 8)
 
 @Composable
-private fun WidgetContent(appWidgetId: Int, entries: List<WidgetEntry>, page: Int) {
+private fun WidgetContent(
+    appWidgetId: Int,
+    entries: List<WidgetEntry>,
+    page: Int,
+    palette: ColorPalette,
+    theme: WidgetTheme,
+    allResting: Boolean,
+) {
     val size = LocalSize.current
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(PanelBackground)
+            .background(panelBackground(palette, theme))
             .roundedCorners(26.dp)
             .padding(top = 14.dp, bottom = 11.dp),
     ) {
@@ -136,7 +192,7 @@ private fun WidgetContent(appWidgetId: Int, entries: List<WidgetEntry>, page: In
         WidgetHeader(appWidgetId = appWidgetId, showTitle = size.width >= 200.dp)
         Box(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
             if (entries.isEmpty()) {
-                EmptyCard(appWidgetId = appWidgetId)
+                EmptyCard(appWidgetId = appWidgetId, allResting = allResting)
             } else {
                 WatcherCard(entry = entries[page], journeyLines = journeyLines(size))
             }
@@ -306,12 +362,26 @@ private fun showPage(page: Int) = actionRunCallback<ShowPageAction>(
     actionParametersOf(ShowPageAction.PAGE to page),
 )
 
+/**
+ * The watchers a widget actually pages through, in the configured order.
+ * With "Show only active" on, resting ones drop out of the loop entirely.
+ */
+private suspend fun pagedWatchers(context: Context, appWidgetId: Int): List<Watcher> {
+    val repository = context.appContainer.watcherRepository
+    val onlyActive = WidgetPrefs.showOnlyActive(context, appWidgetId)
+    val now = LocalDateTime.now()
+    return WidgetPrefs.selectedWatchers(context, appWidgetId).mapNotNull { watcherId ->
+        repository.getWatcher(watcherId)
+            ?.takeIf { !onlyActive || (it.enabled && it.isActiveAt(now)) }
+    }
+}
+
 /** Number of connections a widget pages through. */
-private fun pageCount(context: Context, appWidgetId: Int): Int =
-    WidgetPrefs.selectedWatchers(context, appWidgetId).size
+private suspend fun pageCount(context: Context, appWidgetId: Int): Int =
+    pagedWatchers(context, appWidgetId).size
 
 @Composable
-private fun EmptyCard(appWidgetId: Int) {
+private fun EmptyCard(appWidgetId: Int, allResting: Boolean) {
     Box(modifier = GlanceModifier.padding(horizontal = 15.dp)) {
         Box(
             modifier = GlanceModifier
@@ -322,7 +392,14 @@ private fun EmptyCard(appWidgetId: Int) {
                 .padding(vertical = 12.dp, horizontal = 13.dp),
         ) {
             Text(
-                text = "Tap to pick watchers for this widget",
+                // Picked-but-all-resting is not the same as nothing picked, and
+                // telling someone to pick watchers they already picked is a
+                // dead end.
+                text = if (allResting) {
+                    "Every watcher is resting — the pager resumes when a window opens"
+                } else {
+                    "Tap to pick watchers for this widget"
+                },
                 style = TextStyle(
                     fontSize = 12.sp,
                     color = GlanceTheme.colors.onSurfaceVariant,

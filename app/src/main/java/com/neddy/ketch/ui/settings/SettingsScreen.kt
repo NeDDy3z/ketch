@@ -1,6 +1,7 @@
 package com.neddy.ketch.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,24 +21,29 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -54,25 +62,32 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.BuildConfig
 import com.neddy.ketch.appContainer
+import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.data.settings.RefreshScope
-import com.neddy.ketch.data.settings.ThemeMode
 import com.neddy.ketch.ui.components.SkeletonBox
+import com.neddy.ketch.ui.theme.description
+import com.neddy.ketch.ui.theme.displayName
+import com.neddy.ketch.ui.theme.paletteSwatch
 import java.time.DayOfWeek
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
     val context = LocalContext.current
     val viewModel: SettingsViewModel = viewModel { SettingsViewModel(context.appContainer) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    var paletteSheetOpen by remember { mutableStateOf(false) }
+    var windowDialogOpen by remember { mutableStateOf(false) }
+    var radiusDialogOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -131,44 +146,23 @@ fun SettingsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             SettingsGroup(title = "Appearance") {
-                SubLabel("Theme")
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ThemeMode.entries.forEachIndexed { index, mode ->
-                        SegmentedButton(
-                            selected = current.themeMode == mode,
-                            onClick = { viewModel.setThemeMode(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ThemeMode.entries.size,
-                            ),
-                            icon = {},
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    imageVector = when (mode) {
-                                        ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                                        ThemeMode.LIGHT -> Icons.Filled.LightMode
-                                        ThemeMode.DARK -> Icons.Filled.DarkMode
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Text(
-                                    text = when (mode) {
-                                        ThemeMode.SYSTEM -> "System"
-                                        ThemeMode.LIGHT -> "Light"
-                                        ThemeMode.DARK -> "Dark"
-                                    },
-                                    fontSize = 13.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-                        }
-                    }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer),
+                ) {
+                    PaletteRow(
+                        palette = current.palette,
+                        onClick = { paletteSheetOpen = true },
+                    )
                 }
+                Text(
+                    text = "Ketch is dark-only — the palette sets its tones.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
 
             SettingsGroup(title = "Editing") {
@@ -191,6 +185,46 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = current.editGesture == EditGesture.HOLD,
                         title = "Open by long-press",
                         onClick = { viewModel.setEditGesture(EditGesture.HOLD) },
+                    )
+                }
+            }
+
+            SettingsGroup(title = "Gestures") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Text(
+                            text = "Double-tap opens in Google Maps",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "Double-tap a connection on Home to launch it as a " +
+                                "route in Google Maps.",
+                            fontSize = 12.sp,
+                            lineHeight = 17.4.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = current.doubleTapOpensMaps,
+                        onCheckedChange = viewModel::setDoubleTapOpensMaps,
                     )
                 }
             }
@@ -330,49 +364,65 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
 
-                SliderCard(
-                    label = "Window start",
-                    valueText = "%02d:%02d".format(
-                        current.watcherDefaults.windowStartMinutes / 60,
-                        current.watcherDefaults.windowStartMinutes % 60,
-                    ),
-                    minLabel = "00:00",
-                    maxLabel = "23:45",
+                // Two compact value cards rather than three sliders: the window
+                // reads as one range, and each opens its own picker.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Slider(
-                        value = current.watcherDefaults.windowStartMinutes.toFloat(),
-                        onValueChange = { viewModel.setDefaultWindowStart(it.toInt() / 15 * 15) },
-                        valueRange = 0f..(24f * 60f - 15f),
+                    ValueCard(
+                        overline = "Window",
+                        value = "${formatMinutes(current.watcherDefaults.windowStartMinutes)}–" +
+                            formatMinutes(current.watcherDefaults.windowEndMinutes),
+                        onClick = { windowDialogOpen = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    ValueCard(
+                        overline = "Radius",
+                        value = "${current.watcherDefaults.triggerRadiusMeters} m",
+                        onClick = { radiusDialogOpen = true },
+                        modifier = Modifier.weight(1f),
                     )
                 }
+            }
 
-                SliderCard(
-                    label = "Window end",
-                    valueText = "%02d:%02d".format(
-                        current.watcherDefaults.windowEndMinutes / 60,
-                        current.watcherDefaults.windowEndMinutes % 60,
-                    ),
-                    minLabel = "00:00",
-                    maxLabel = "23:45",
+            SettingsGroup(title = "Support") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clickable(onClick = onOpenHelp)
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Slider(
-                        value = current.watcherDefaults.windowEndMinutes.toFloat(),
-                        onValueChange = { viewModel.setDefaultWindowEnd(it.toInt() / 15 * 15) },
-                        valueRange = 0f..(24f * 60f - 15f),
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Help,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
                     )
-                }
-
-                SliderCard(
-                    label = "Leave radius",
-                    valueText = "${current.watcherDefaults.triggerRadiusMeters} m",
-                    minLabel = "100 m",
-                    maxLabel = "1000 m",
-                ) {
-                    Slider(
-                        value = current.watcherDefaults.triggerRadiusMeters.toFloat(),
-                        onValueChange = { viewModel.setDefaultRadius(it.toInt()) },
-                        valueRange = 100f..1000f,
-                        steps = 8,
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = "Help & feedback",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = "FAQ, troubleshooting, report an issue",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
@@ -394,6 +444,252 @@ fun SettingsScreen(onBack: () -> Unit) {
                     },
                 )
             }
+        }
+
+        // A sheet rather than a page, so the change stays visible behind it.
+        if (paletteSheetOpen) {
+            PaletteSheet(
+                selected = current.palette,
+                onSelect = viewModel::setPalette,
+                onDismiss = { paletteSheetOpen = false },
+            )
+        }
+
+        if (windowDialogOpen) {
+            WindowDialog(
+                startMinutes = current.watcherDefaults.windowStartMinutes,
+                endMinutes = current.watcherDefaults.windowEndMinutes,
+                onConfirm = { start, end ->
+                    viewModel.setDefaultWindowStart(start)
+                    viewModel.setDefaultWindowEnd(end)
+                    windowDialogOpen = false
+                },
+                onDismiss = { windowDialogOpen = false },
+            )
+        }
+
+        if (radiusDialogOpen) {
+            RadiusDialog(
+                meters = current.watcherDefaults.triggerRadiusMeters,
+                onConfirm = {
+                    viewModel.setDefaultRadius(it)
+                    radiusDialogOpen = false
+                },
+                onDismiss = { radiusDialogOpen = false },
+            )
+        }
+    }
+}
+
+/**
+ * The Appearance entry point: the active palette's name, its subtitle and the
+ * three tones that carry the UI, previewed as overlapping swatches.
+ */
+@Composable
+private fun PaletteRow(palette: ColorPalette, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Palette,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(text = "Color palette", fontSize = 15.sp)
+            Text(
+                text = "${palette.displayName} · ${palette.description}",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        PaletteSwatches(palette = palette, size = 22.dp)
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * One list, wallpaper first: Material You leads as the shipping default and the
+ * seven fixed seeds follow. Tapping a row re-tints everything live — the sheet
+ * stays open so the change is visible behind it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PaletteSheet(
+    selected: ColorPalette,
+    onSelect: (ColorPalette) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = "Color palette",
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.2).sp,
+                )
+                Text(
+                    text = "Applies instantly · dark tones only",
+                    fontSize = 12.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 14.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer),
+            ) {
+                ColorPalette.entries.forEachIndexed { index, palette ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                    }
+                    PaletteSheetRow(
+                        palette = palette,
+                        selected = palette == selected,
+                        onClick = { onSelect(palette) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteSheetRow(
+    palette: ColorPalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                } else {
+                    Color.Transparent
+                },
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PaletteSwatches(palette = palette, size = 26.dp)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = palette.displayName,
+                fontSize = 15.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            )
+            Text(
+                text = palette.description,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            imageVector = if (selected) {
+                Icons.Filled.RadioButtonChecked
+            } else {
+                Icons.Filled.RadioButtonUnchecked
+            },
+            contentDescription = null,
+            tint = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+/**
+ * Each palette previewed by primary, tertiary and its card surface — the three
+ * tones that actually carry the UI — rather than an abstract swatch. Wallpaper
+ * gets a conic sweep of the live dynamic tones instead.
+ */
+@Composable
+private fun PaletteSwatches(palette: ColorPalette, size: Dp) {
+    val scheme = MaterialTheme.colorScheme
+    val overlap = size / 3
+    if (palette == ColorPalette.WALLPAPER) {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(
+                    Brush.sweepGradient(
+                        listOf(
+                            scheme.primary,
+                            scheme.tertiary,
+                            scheme.secondary,
+                            scheme.primary,
+                        ),
+                    ),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Wallpaper,
+                contentDescription = null,
+                tint = scheme.onPrimary,
+                modifier = Modifier.size(size / 2),
+            )
+        }
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(-overlap)) {
+        paletteSwatch(palette, scheme).forEachIndexed { index, color ->
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(color)
+                    .then(
+                        // The surface tone needs an edge or it vanishes into the row.
+                        if (index == 2) {
+                            Modifier.border(1.dp, scheme.outlineVariant, CircleShape)
+                        } else {
+                            Modifier
+                        },
+                    ),
+            )
         }
     }
 }
@@ -443,7 +739,7 @@ private fun RadioRow(
                 if (tintWhenSelected && selected) {
                     MaterialTheme.colorScheme.surfaceContainerHigh
                 } else {
-                    androidx.compose.ui.graphics.Color.Transparent
+                    Color.Transparent
                 },
             )
             .clickable(onClick = onClick)
@@ -485,51 +781,130 @@ private fun RadioRow(
     }
 }
 
+/** "HH:mm" for a minute-of-day. */
+private fun formatMinutes(minutes: Int): String =
+    "%02d:%02d".format(minutes / 60, minutes % 60)
+
+/** A compact labelled value that opens its own picker. */
 @Composable
-private fun SliderCard(
-    label: String,
-    valueText: String,
-    minLabel: String,
-    maxLabel: String,
-    slider: @Composable () -> Unit,
+private fun ValueCard(
+    overline: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 16.dp, top = 9.dp, bottom = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = label, fontSize = 14.sp)
-            Text(
-                text = valueText,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-                style = TextStyle(fontFeatureSettings = "tnum"),
-            )
-        }
-        slider()
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = minLabel,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = maxLabel,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = overline,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            style = TextStyle(fontFeatureSettings = "tnum"),
+        )
     }
+}
+
+/** From/To time inputs for the default active window. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WindowDialog(
+    startMinutes: Int,
+    endMinutes: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val start = rememberTimePickerState(
+        initialHour = startMinutes / 60,
+        initialMinute = startMinutes % 60,
+        is24Hour = true,
+    )
+    val end = rememberTimePickerState(
+        initialHour = endMinutes / 60,
+        initialMinute = endMinutes % 60,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Default window") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SubLabel("From")
+                TimeInput(state = start)
+                SubLabel("To")
+                TimeInput(state = end)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(
+                        start.hour * 60 + start.minute,
+                        end.hour * 60 + end.minute,
+                    )
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** Slider for the default leave radius, with a live readout. */
+@Composable
+private fun RadiusDialog(
+    meters: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var value by remember { mutableStateOf(meters.toFloat()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Default leave radius") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "${value.toInt()} m",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = TextStyle(fontFeatureSettings = "tnum"),
+                )
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = 100f..1000f,
+                    steps = 8,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "100 m",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "1000 m",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(value.toInt()) }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

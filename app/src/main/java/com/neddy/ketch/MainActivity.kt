@@ -1,7 +1,9 @@
 package com.neddy.ketch
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +17,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.neddy.ketch.data.settings.ThemeMode
+import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.ui.editor.WatcherEditScreen
+import com.neddy.ketch.ui.help.HelpScreen
 import com.neddy.ketch.ui.home.HomeScreen
 import com.neddy.ketch.ui.navigation.Routes
 import com.neddy.ketch.ui.settings.SettingsScreen
@@ -27,11 +30,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        val themeModeFlow = appContainer.settingsRepository.settings.map { it.themeMode }
+        // Dark-only: the bars stay transparent with light icons whatever the
+        // system light/dark setting is, since every palette is a dark surface.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
+        val paletteFlow = appContainer.settingsRepository.settings.map { it.palette }
         setContent {
-            val themeMode by themeModeFlow.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
-            KetchTheme(themeMode = themeMode) {
+            val palette by paletteFlow.collectAsStateWithLifecycle(ColorPalette.DEFAULT)
+            KetchTheme(palette = palette) {
                 KetchRoot()
             }
         }
@@ -55,10 +63,17 @@ fun KetchRoot() {
                     onCreateWatcher = { navController.navigate(Routes.watcherEdit()) },
                     onEditWatcher = { id -> navController.navigate(Routes.watcherEdit(id)) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenHelp = { navController.navigate(Routes.HELP) },
                 )
             }
             composable(Routes.SETTINGS) {
-                SettingsScreen(onBack = { navController.popBackStack() })
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenHelp = { navController.navigate(Routes.HELP) },
+                )
+            }
+            composable(Routes.HELP) {
+                HelpScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Routes.WATCHER_EDIT,

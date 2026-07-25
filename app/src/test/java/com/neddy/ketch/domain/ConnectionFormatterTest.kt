@@ -62,37 +62,59 @@ class ConnectionFormatterTest {
     )
 
     @Test
-    fun `title is time then stop then line then emoji`() {
+    fun `body carries departure arrival and transfer count on one line`() {
         assertEquals(
-            "16:00 Praha hl.n. (R41) 🚆",
-            ConnectionFormatter.notificationTitle(withTransfer, zone),
-        )
-    }
-
-    @Test
-    fun `text continues after the first boarding on one line`() {
-        assertEquals(
-            "16:30 Cesky Brod (660) 🚌 - 17:00 Kostelec n.C. lesy",
+            "16:00 Praha hl.n. (R41) 🚆 → arrives 17:00 · 1 transfer",
             ConnectionFormatter.notificationText(withTransfer, zone),
         )
     }
 
     @Test
-    fun `big text continues after the first boarding on separate lines`() {
+    fun `a direct connection says so instead of counting transfers`() {
         assertEquals(
-            "16:30 Cesky Brod (660) 🚌\n17:00 Kostelec n.C. lesy",
+            "16:00 Praha hl.n. (S1) 🚆 → arrives 16:45 · Direct",
+            ConnectionFormatter.notificationText(direct, zone),
+        )
+    }
+
+    @Test
+    fun `an imminent departure appends a leave within countdown`() {
+        assertEquals(
+            "16:00 Praha hl.n. (S1) 🚆 → arrives 16:45 · Direct · leave within 4 min",
+            ConnectionFormatter.notificationText(
+                direct,
+                zone,
+                now = Instant.parse("2026-07-14T13:56:00Z"),
+            ),
+        )
+    }
+
+    @Test
+    fun `a distant departure gets no countdown`() {
+        assertEquals(
+            "16:00 Praha hl.n. (S1) 🚆 → arrives 16:45 · Direct",
+            ConnectionFormatter.notificationText(
+                direct,
+                zone,
+                now = Instant.parse("2026-07-14T10:00:00Z"),
+            ),
+        )
+    }
+
+    @Test
+    fun `big text lists every boarding and the arrival on separate lines`() {
+        assertEquals(
+            "16:00 Praha hl.n. (R41) 🚆\n" +
+                "16:30 Cesky Brod (660) 🚌\n" +
+                "17:00 Kostelec n.C. lesy",
             ConnectionFormatter.notificationBigText(withTransfer, zone),
         )
     }
 
     @Test
-    fun `direct connection body is just the arrival`() {
+    fun `big text for a direct connection is boarding then arrival`() {
         assertEquals(
-            "16:00 Praha hl.n. (S1) 🚆",
-            ConnectionFormatter.notificationTitle(direct, zone),
-        )
-        assertEquals(
-            "16:45 Kolin",
+            "16:00 Praha hl.n. (S1) 🚆\n16:45 Kolin",
             ConnectionFormatter.notificationBigText(direct, zone),
         )
     }
@@ -121,11 +143,13 @@ class ConnectionFormatterTest {
         )
 
         assertEquals(
-            "16:00 Praha hl.n. (S7) 🚆",
-            ConnectionFormatter.notificationTitle(connection, zone),
+            "16:00 Praha hl.n. (S7) 🚆 → arrives 17:00 · 1 transfer",
+            ConnectionFormatter.notificationText(connection, zone),
         )
         assertEquals(
-            "16:20 I.P. Pavlova (381) 🚌\n17:00 K.n.Č.l, nám.",
+            "16:00 Praha hl.n. (S7) 🚆\n" +
+                "16:20 I.P. Pavlova (381) 🚌\n" +
+                "17:00 K.n.Č.l, nám.",
             ConnectionFormatter.notificationBigText(connection, zone),
         )
     }

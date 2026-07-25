@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AltRoute
 import androidx.compose.material.icons.filled.Bedtime
@@ -44,7 +45,10 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,6 +57,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -119,6 +124,7 @@ fun HomeScreen(
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHelp: () -> Unit,
 ) {
     val context = LocalContext.current
     val viewModel: HomeViewModel = viewModel { HomeViewModel(context.appContainer) }
@@ -148,9 +154,12 @@ fun HomeScreen(
                 HomeMode.NORMAL -> HomeHeader(
                     state = state,
                     onRefresh = viewModel::refresh,
+                    onRefreshAll = viewModel::refreshAll,
                     onOpenSettings = onOpenSettings,
+                    onOpenHelp = onOpenHelp,
                     onReorder = { mode = HomeMode.REORDER },
                     onDelete = { mode = HomeMode.DELETE },
+                    onToggleShowResting = { viewModel.setShowResting(!state.showResting) },
                 )
                 HomeMode.REORDER -> ReorderTopBar(
                     onClose = { exitMode() },
@@ -227,9 +236,12 @@ fun HomeScreen(
 private fun HomeHeader(
     state: HomeUiState,
     onRefresh: () -> Unit,
+    onRefreshAll: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHelp: () -> Unit,
     onReorder: () -> Unit,
     onDelete: () -> Unit,
+    onToggleShowResting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -263,9 +275,13 @@ private fun HomeHeader(
             }
             ToolsMenu(
                 hasWatchers = state.watcherConnections.isNotEmpty(),
+                showResting = state.showResting,
+                onRefreshAll = onRefreshAll,
                 onOpenSettings = onOpenSettings,
+                onOpenHelp = onOpenHelp,
                 onReorder = onReorder,
                 onDelete = onDelete,
+                onToggleShowResting = onToggleShowResting,
             )
         }
         val busy = state.loading || state.watcherConnections.any { it.loading }
@@ -297,12 +313,22 @@ private fun HomeHeader(
     }
 }
 
+/**
+ * Overflow, not a settings trip. The four list-level actions sit above a
+ * divider, with Settings and Help below. "Refresh all" is the only way to poll
+ * resting watchers — the header icon and pull-to-refresh cover the active ones —
+ * so the expensive action is one deliberate step away.
+ */
 @Composable
 private fun ToolsMenu(
     hasWatchers: Boolean,
+    showResting: Boolean,
+    onRefreshAll: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHelp: () -> Unit,
     onReorder: () -> Unit,
     onDelete: () -> Unit,
+    onToggleShowResting: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -319,21 +345,39 @@ private fun ToolsMenu(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Settings") },
-                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                text = { Text("Refresh all") },
+                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                enabled = hasWatchers,
                 onClick = {
                     expanded = false
-                    onOpenSettings()
+                    onRefreshAll()
                 },
             )
             DropdownMenuItem(
                 text = { Text("Reorder") },
-                leadingIcon = { Icon(Icons.Filled.DragIndicator, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
                 enabled = hasWatchers,
                 onClick = {
                     expanded = false
                     onReorder()
                 },
+            )
+            // Toggles inline with the menu staying open, so the list change is
+            // visible behind it.
+            DropdownMenuItem(
+                text = { Text(if (showResting) "Hide resting" else "Show resting") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (showResting) {
+                            Icons.Filled.VisibilityOff
+                        } else {
+                            Icons.Filled.Visibility
+                        },
+                        contentDescription = null,
+                    )
+                },
+                enabled = hasWatchers,
+                onClick = onToggleShowResting,
             )
             DropdownMenuItem(
                 text = { Text("Delete") },
@@ -342,6 +386,28 @@ private fun ToolsMenu(
                 onClick = {
                     expanded = false
                     onDelete()
+                },
+            )
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            DropdownMenuItem(
+                text = { Text("Settings") },
+                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onOpenSettings()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Help & feedback") },
+                leadingIcon = {
+                    Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null)
+                },
+                onClick = {
+                    expanded = false
+                    onOpenHelp()
                 },
             )
         }
@@ -490,8 +556,16 @@ private fun NormalContent(
                 )
             }
 
+            state.allRestingHidden -> item {
+                InfoCard(
+                    title = "Every watcher is resting",
+                    body = "Nothing is inside its active window right now. " +
+                        "Turn on “Show resting” in the menu to see them anyway.",
+                )
+            }
+
             else -> itemsIndexed(
-                state.watcherConnections,
+                state.visibleWatcherConnections,
                 key = { _, item -> item.watcher.id },
             ) { _, item ->
                 val open = { onEditWatcher(item.watcher.id) }
@@ -501,30 +575,38 @@ private fun NormalContent(
                         onClick = { if (tapToEdit) open() },
                         onLongClick = { if (!tapToEdit) open() },
                         // Double tap hands the route to Google Maps as public
-                        // transport directions to the watcher destination.
-                        onDoubleClick = {
-                            TransitDirections.open(context, item.watcher.destination)
+                        // transport directions to the watcher destination, when
+                        // the gesture is enabled in Settings.
+                        onDoubleClick = if (state.doubleTapOpensMaps) {
+                            { TransitDirections.open(context, item.watcher.destination) }
+                        } else {
+                            null
                         },
                     ),
                 ) {
                     val connection = item.connection
-                    when {
-                        item.disabled -> DisabledCard(
-                            watcher = item.watcher,
-                            onEnable = { onEnableWatcher(item.watcher) },
-                        )
-                        item.loading -> ConnectionCardSkeleton()
-                        connection != null -> ConnectionCard(
-                            title = item.watcher.name,
-                            connection = connection,
-                            titleIcon = watcherIcon(item.watcher.icon),
-                            subtitle = "To ${item.watcher.destination.name}",
-                        )
-                        else -> NoConnectionCard(
-                            watcher = item.watcher,
-                            error = item.error,
-                            onRetry = onRefresh,
-                        )
+                    // Off, not broken: a resting watcher stays scannable but goes
+                    // visually quiet rather than looking like it crashed.
+                    val restingAlpha = if (item.resting && !item.disabled) 0.7f else 1f
+                    Box(modifier = Modifier.graphicsLayer { alpha = restingAlpha }) {
+                        when {
+                            item.disabled -> DisabledCard(
+                                watcher = item.watcher,
+                                onEnable = { onEnableWatcher(item.watcher) },
+                            )
+                            item.loading -> ConnectionCardSkeleton()
+                            connection != null -> ConnectionCard(
+                                title = item.watcher.name,
+                                connection = connection,
+                                titleIcon = watcherIcon(item.watcher.icon),
+                                subtitle = "To ${item.watcher.destination.name}",
+                            )
+                            else -> NoConnectionCard(
+                                watcher = item.watcher,
+                                error = item.error,
+                                onRetry = onRefresh,
+                            )
+                        }
                     }
                 }
             }

@@ -3,9 +3,9 @@ package com.neddy.ketch.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.data.settings.AppSettings
+import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.data.settings.RefreshScope
-import com.neddy.ketch.data.settings.ThemeMode
 import com.neddy.ketch.data.settings.WatcherDefaults
 import com.neddy.ketch.di.AppContainer
 import java.time.DayOfWeek
@@ -19,8 +19,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings: StateFlow<AppSettings?> = container.settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun setThemeMode(mode: ThemeMode) {
-        viewModelScope.launch { container.settingsRepository.setThemeMode(mode) }
+    fun setPalette(palette: ColorPalette) {
+        viewModelScope.launch { container.settingsRepository.setPalette(palette) }
     }
 
     fun setApiKey(key: String) {
@@ -29,6 +29,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setEditGesture(gesture: EditGesture) {
         viewModelScope.launch { container.settingsRepository.setEditGesture(gesture) }
+    }
+
+    fun setDoubleTapOpensMaps(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setDoubleTapOpensMaps(enabled) }
     }
 
     fun setRefreshScope(scope: RefreshScope) {

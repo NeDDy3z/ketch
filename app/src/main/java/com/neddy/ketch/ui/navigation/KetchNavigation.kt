@@ -3,6 +3,7 @@ package com.neddy.ketch.ui.navigation
 object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
+    const val HELP = "help"
     const val WATCHER_EDIT = "watcher_edit?watcherId={watcherId}"
 
     fun watcherEdit(watcherId: Long? = null): String =

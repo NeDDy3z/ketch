@@ -7,14 +7,21 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.neddy.ketch.MainActivity
 import com.neddy.ketch.R
+import com.neddy.ketch.data.settings.ColorPalette
+import com.neddy.ketch.data.settings.SettingsRepository
 import com.neddy.ketch.domain.model.Watcher
+import com.neddy.ketch.ui.theme.paletteColors
 
-class NotificationHelper(private val context: Context) {
+class NotificationHelper(
+    private val context: Context,
+    private val settingsRepository: SettingsRepository,
+) {
 
     fun createChannels() {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -35,12 +42,16 @@ class NotificationHelper(private val context: Context) {
         ) == PackageManager.PERMISSION_GRANTED
 
     /**
-     * Posts the connection notification for [watcher]. The [title] carries
-     * the first boarding with its departure time, [text] the rest of the
-     * route collapsed to one line, and [expandedText] the same stops on
-     * separate lines.
+     * Posts the connection notification for [watcher]. The [title] is the
+     * watcher's name, [text] the whole decision collapsed to one line, and
+     * [expandedText] the same journey with one stop per line.
      */
-    fun notifyConnection(watcher: Watcher, title: String, text: String, expandedText: String) {
+    suspend fun notifyConnection(
+        watcher: Watcher,
+        title: String,
+        text: String,
+        expandedText: String,
+    ) {
         if (!hasPermission()) return
 
         val contentIntent = PendingIntent.getActivity(
@@ -52,9 +63,9 @@ class NotificationHelper(private val context: Context) {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_CONNECTIONS)
             .setSmallIcon(R.drawable.ic_train)
-            // Brand primary from the Ketch M3 palette (docs/design_document.md):
-            // tints the small icon and accents in the notification chrome.
-            .setColor(0xFF8A5100.toInt())
+            // The active palette's primary tints the small icon and the accents
+            // in the notification chrome; the shell itself is Android's.
+            .setColor(accentColor())
             .setColorized(false)
             .setContentTitle(title)
             .setContentText(text)
@@ -67,6 +78,18 @@ class NotificationHelper(private val context: Context) {
 
         NotificationManagerCompat.from(context)
             .notify(NOTIFICATION_TAG, watcher.id.toInt(), notification)
+    }
+
+    /**
+     * The accent the OS tints the notification with. Wallpaper palettes have no
+     * fixed seed to read, so they fall back to the default one — the dynamic
+     * scheme lives in Compose and is not available from a worker.
+     */
+    private suspend fun accentColor(): Int {
+        val palette = settingsRepository.current().palette
+        val scheme = paletteColors(palette).scheme
+            ?: requireNotNull(paletteColors(ColorPalette.DEFAULT).scheme)
+        return scheme.primary.toArgb()
     }
 
     companion object {

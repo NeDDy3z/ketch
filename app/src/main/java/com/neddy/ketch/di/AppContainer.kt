@@ -59,7 +59,9 @@ class AppContainer(context: Context) {
 
     val locationProvider: LocationProvider by lazy { LocationProvider(appContext) }
 
-    val notificationHelper: NotificationHelper by lazy { NotificationHelper(appContext) }
+    val notificationHelper: NotificationHelper by lazy {
+        NotificationHelper(appContext, settingsRepository)
+    }
 
     val geofenceManager: GeofenceManager by lazy { GeofenceManager(appContext) }
 

@@ -1,5 +1,6 @@
 package com.neddy.ketch.ui.components
 
+import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,8 +48,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -58,6 +60,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.MapsInitializer
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
@@ -68,19 +73,43 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.neddy.ketch.R
 import com.neddy.ketch.domain.model.PlaceSuggestion
+import com.neddy.ketch.ui.theme.LocalKetchMapColors
+import com.neddy.ketch.ui.theme.ketchMapStyleJson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * The stock map pin recoloured to the palette's primary. The Maps SDK only
+ * exposes a hue for the built-in marker, so the pin keeps its familiar shape
+ * and takes the accent's hue — enough to stop a red pin fighting every palette.
+ *
+ * [BitmapDescriptorFactory] throws until the Maps SDK has been initialized, and
+ * composition can reach here before the map itself exists, so initialization is
+ * forced first. A pin that cannot be tinted falls back to the default rather
+ * than taking the screen down with it.
+ */
+@Composable
+private fun rememberPrimaryPin(primary: Color): BitmapDescriptor? {
+    val context = LocalContext.current
+    return remember(primary) {
+        runCatching {
+            MapsInitializer.initialize(context)
+            val hsv = FloatArray(3)
+            AndroidColor.colorToHSV(primary.toArgb(), hsv)
+            BitmapDescriptorFactory.defaultMarker(hsv[0])
+        }.getOrNull()
+    }
+}
 
 /**
  * Full-bleed map picker dialog. The map fills the screen behind a floating
  * search pill, a my-location button, and a bottom confirm sheet. Search an
  * address, tap the map, or pinpoint the current position, then confirm.
- * [radiusMeters], when set, previews the leave radius around the pick. The
- * map switches to a dark style when the app theme is dark. [isTrigger]
- * selects the sheet icon (trigger origin vs. destination place); it defaults
- * to whether a radius applies so existing call sites keep working.
+ * [radiusMeters], when set, previews the leave radius around the pick. The map
+ * tiles are styled from the active palette's map tokens. [isTrigger] selects the
+ * sheet icon (trigger origin vs. destination place); it defaults to whether a
+ * radius applies so existing call sites keep working.
  */
 @Composable
 fun MapPickerDialog(
@@ -94,7 +123,6 @@ fun MapPickerDialog(
     onPick: (LatLng) -> Unit,
     isTrigger: Boolean = radiusMeters != null,
 ) {
-    val context = LocalContext.current
     var picked by remember { mutableStateOf(initial) }
     var pickedLabel by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -109,29 +137,20 @@ fun MapPickerDialog(
     val markerState = remember { MarkerState(position = start) }
     picked?.let { markerState.position = it }
 
-    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val mapStyle = remember(darkTheme) {
-        if (darkTheme) {
-            MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_dark)
-        } else {
-            null
-        }
+    // Tiles follow the active palette, so the picker never looks like a
+    // different app than the screen that opened it.
+    val mapColors = LocalKetchMapColors.current
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val mapStyle = remember(mapColors, onSurface, onSurfaceVariant) {
+        MapStyleOptions(ketchMapStyleJson(mapColors, onSurface, onSurfaceVariant))
     }
-    val floatingColor = if (darkTheme) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-    val sheetColor = if (darkTheme) {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-    val radiusFill = MaterialTheme.colorScheme.primary.copy(
-        alpha = if (darkTheme) 0.20f else 0.16f,
-    )
+    val floatingColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val sheetColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val radiusFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
     val radiusStroke = MaterialTheme.colorScheme.primary
     val radiusStrokeWidth = with(LocalDensity.current) { 2.dp.toPx() }
+    val pinIcon = rememberPrimaryPin(radiusStroke)
 
     LaunchedEffect(Unit) {
         if (initial == null) {
@@ -181,7 +200,10 @@ fun MapPickerDialog(
                 },
             ) {
                 picked?.let { center ->
-                    Marker(state = markerState)
+                    // The pin speaks primary like the ring and the confirm
+                    // button; the stock marker is red, which this design
+                    // reserves for destructive actions.
+                    Marker(state = markerState, icon = pinIcon)
                     if (radiusMeters != null) {
                         Circle(
                             center = center,

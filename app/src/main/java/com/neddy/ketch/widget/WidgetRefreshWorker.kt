@@ -63,8 +63,7 @@ class WidgetRefreshWorker(
                 if (best != null) {
                     // One boarding per line: a connection owns a whole widget
                     // page, so it reads like a departure board.
-                    ConnectionFormatter.notificationTitle(best) + "\n" +
-                        ConnectionFormatter.notificationBigText(best)
+                    ConnectionFormatter.notificationBigText(best)
                 } else {
                     "No connection found"
                 }

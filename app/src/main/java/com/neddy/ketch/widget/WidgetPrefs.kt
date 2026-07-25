@@ -10,6 +10,13 @@ import androidx.core.content.edit
  * watcher. SharedPreferences is intentional here, both readers and writers
  * are synchronous widget plumbing.
  */
+/**
+ * How a placed widget picks between the palette's dark tones and its light
+ * counterpart. Independent of the app — which is dark-only — so a translucent
+ * widget can sit lighter on a bright wallpaper.
+ */
+enum class WidgetTheme { SYSTEM, LIGHT, DARK }
+
 object WidgetPrefs {
 
     private fun prefs(context: Context): SharedPreferences =
@@ -33,7 +40,33 @@ object WidgetPrefs {
         prefs(context).edit {
             remove("watchers_$appWidgetId")
             remove("page_$appWidgetId")
+            remove("only_active_$appWidgetId")
+            remove("theme_$appWidgetId")
         }
+    }
+
+    /**
+     * Whether the pager skips resting watchers until their window opens. On by
+     * default, so a placed widget costs nothing overnight.
+     */
+    fun showOnlyActive(context: Context, appWidgetId: Int): Boolean =
+        prefs(context).getBoolean("only_active_$appWidgetId", true)
+
+    fun setShowOnlyActive(context: Context, appWidgetId: Int, onlyActive: Boolean) {
+        prefs(context).edit {
+            putBoolean("only_active_$appWidgetId", onlyActive)
+            // The visible page set changes with the filter.
+            putInt("page_$appWidgetId", 0)
+        }
+    }
+
+    fun theme(context: Context, appWidgetId: Int): WidgetTheme =
+        prefs(context).getString("theme_$appWidgetId", null)
+            ?.let { runCatching { WidgetTheme.valueOf(it) }.getOrNull() }
+            ?: WidgetTheme.SYSTEM
+
+    fun setTheme(context: Context, appWidgetId: Int, theme: WidgetTheme) {
+        prefs(context).edit { putString("theme_$appWidgetId", theme.name) }
     }
 
     /** Index of the connection the widget currently shows. */

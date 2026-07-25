@@ -23,6 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +34,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neddy.ketch.appContainer
-import com.neddy.ketch.data.settings.ThemeMode
+import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.watcherIcon
 import com.neddy.ketch.ui.theme.KetchTheme
@@ -74,22 +82,28 @@ class WidgetConfigActivity : ComponentActivity() {
         }
 
         val container = appContainer
-        val themeModeFlow = container.settingsRepository.settings.map { it.themeMode }
+        val paletteFlow = container.settingsRepository.settings.map { it.palette }
         val watchersFlow = container.watcherRepository.observeWatchers()
         val initialSelection = WidgetPrefs.selectedWatchers(this, appWidgetId).toSet()
+        val initialOnlyActive = WidgetPrefs.showOnlyActive(this, appWidgetId)
+        val initialTheme = WidgetPrefs.theme(this, appWidgetId)
 
         setContent {
-            val themeMode by themeModeFlow.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
-            KetchTheme(themeMode = themeMode) {
+            val palette by paletteFlow.collectAsStateWithLifecycle(ColorPalette.DEFAULT)
+            KetchTheme(palette = palette) {
                 ConfigContent(
                     watchersFlow = watchersFlow,
                     initialSelection = initialSelection,
+                    initialOnlyActive = initialOnlyActive,
+                    initialTheme = initialTheme,
                     // An existing selection means the widget is already on the
                     // home screen and is only being reconfigured.
                     confirmLabel = if (initialSelection.isEmpty()) "Add widget" else "Save",
                     onBack = { finish() },
-                    onConfirm = { selected ->
+                    onConfirm = { selected, onlyActive, theme ->
                         WidgetPrefs.setSelectedWatchers(this, appWidgetId, selected)
+                        WidgetPrefs.setShowOnlyActive(this, appWidgetId, onlyActive)
+                        WidgetPrefs.setTheme(this, appWidgetId, theme)
                         WidgetRefreshWorker.enqueue(this)
                         setResult(
                             RESULT_OK,
@@ -107,12 +121,16 @@ class WidgetConfigActivity : ComponentActivity() {
 private fun ConfigContent(
     watchersFlow: Flow<List<Watcher>>,
     initialSelection: Set<Long>,
+    initialOnlyActive: Boolean,
+    initialTheme: WidgetTheme,
     confirmLabel: String,
     onBack: () -> Unit,
-    onConfirm: (List<Long>) -> Unit,
+    onConfirm: (List<Long>, Boolean, WidgetTheme) -> Unit,
 ) {
     val watchers by watchersFlow.collectAsStateWithLifecycle(emptyList())
     var selected by remember { mutableStateOf(initialSelection) }
+    var onlyActive by remember { mutableStateOf(initialOnlyActive) }
+    var theme by remember { mutableStateOf(initialTheme) }
 
     Scaffold(
         topBar = {
@@ -144,7 +162,7 @@ private fun ConfigContent(
         },
         bottomBar = {
             Button(
-                onClick = { onConfirm(selected.toList()) },
+                onClick = { onConfirm(selected.toList(), onlyActive, theme) },
                 enabled = selected.isNotEmpty(),
                 shape = RoundedCornerShape(18.dp),
                 modifier = Modifier
@@ -181,8 +199,99 @@ private fun ConfigContent(
                     },
                 )
                 Text(
-                    text = "Checked watchers appear in the widget.",
+                    text = "Checked watchers appear as swipeable pages.",
                     fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 15.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        text = "Show only active",
+                        fontSize = 15.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = onlyActive,
+                        onCheckedChange = { onlyActive = it },
+                    )
+                }
+                Text(
+                    text = "Resting watchers are skipped in the pager until their " +
+                        "window opens.",
+                    fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Widget theme",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight(700),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    WidgetTheme.entries.forEachIndexed { index, option ->
+                        SegmentedButton(
+                            selected = theme == option,
+                            onClick = { theme = option },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = WidgetTheme.entries.size,
+                            ),
+                            icon = {},
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = when (option) {
+                                        WidgetTheme.SYSTEM -> Icons.Filled.BrightnessAuto
+                                        WidgetTheme.LIGHT -> Icons.Filled.LightMode
+                                        WidgetTheme.DARK -> Icons.Filled.DarkMode
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(17.dp),
+                                )
+                                Text(
+                                    text = when (option) {
+                                        WidgetTheme.SYSTEM -> "System"
+                                        WidgetTheme.LIGHT -> "Light"
+                                        WidgetTheme.DARK -> "Dark"
+                                    },
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight(600),
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    text = "Independent of the app — a translucent widget can sit " +
+                        "lighter on a bright wallpaper.",
+                    fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )

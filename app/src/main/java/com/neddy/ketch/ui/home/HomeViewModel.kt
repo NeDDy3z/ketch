@@ -14,6 +14,7 @@ import com.neddy.ketch.ui.components.userMessageFor
 import java.time.Instant
 import java.time.LocalDateTime
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,8 @@ data class WatcherConnection(
     val connection: TransitConnection?,
     val error: String?,
     val loading: Boolean = false,
+    /** Enabled, but outside its active day or time window right now. */
+    val resting: Boolean = false,
 ) {
     val disabled: Boolean get() = !watcher.enabled
 }
@@ -39,7 +42,24 @@ data class HomeUiState(
     val hasWatchers: Boolean = true,
     val missingApiKey: Boolean = false,
     val editGesture: EditGesture = EditGesture.TAP,
-)
+    val doubleTapOpensMaps: Boolean = true,
+    val showResting: Boolean = true,
+) {
+    /**
+     * What the home list actually renders: active watchers first, then resting
+     * and paused ones, each keeping the user's own order. Hidden entirely when
+     * "Show resting" is off, so a morning list is only the morning commute.
+     */
+    val visibleWatcherConnections: List<WatcherConnection>
+        get() {
+            val (atRest, active) = watcherConnections.partition { it.resting || it.disabled }
+            return if (showResting) active + atRest else active
+        }
+
+    /** True when there are watchers but the current filter hides all of them. */
+    val allRestingHidden: Boolean
+        get() = watcherConnections.isNotEmpty() && visibleWatcherConnections.isEmpty()
+}
 
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
@@ -63,8 +83,29 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.settingsRepository.settings
                 .collectLatest { settings ->
-                    _uiState.update { it.copy(editGesture = settings.editGesture) }
+                    _uiState.update {
+                        it.copy(
+                            editGesture = settings.editGesture,
+                            doubleTapOpensMaps = settings.doubleTapOpensMaps,
+                            showResting = settings.showResting,
+                        )
+                    }
                 }
+        }
+        // Resting is a function of the clock, not of the data, so nothing else
+        // would notice a watcher's window opening. Re-evaluate on a slow tick so
+        // cards wake up and re-sort on their own; this touches no network.
+        viewModelScope.launch {
+            while (true) {
+                delay(RESTING_TICK_MS)
+                _uiState.update { state ->
+                    state.copy(
+                        watcherConnections = state.watcherConnections.map {
+                            it.copy(resting = it.watcher.isResting())
+                        },
+                    )
+                }
+            }
         }
     }
 
@@ -81,7 +122,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 val byId = state.watcherConnections.associateBy { it.watcher.id }
                 state.copy(
                     watcherConnections = watchers.mapNotNull { w ->
-                        byId[w.id]?.copy(watcher = w)
+                        byId[w.id]?.copy(watcher = w, resting = w.isResting())
                     },
                 )
             }
@@ -98,6 +139,11 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         return normalizedA == normalizedB
     }
 
+    /**
+     * The header sync icon and pull-to-refresh. Follows the refresh-scope
+     * setting, so by default a morning commute never spends quota on an
+     * evening watcher.
+     */
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(refreshing = true) }
@@ -114,6 +160,25 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             load(watchers, refreshOnly)
             _uiState.update { it.copy(refreshing = false) }
         }
+    }
+
+    /**
+     * The menu's "Refresh all": the only way to poll resting watchers, and one
+     * deliberate step away from the cheap refresh because it costs the most
+     * quota.
+     */
+    fun refreshAll() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(refreshing = true) }
+            val watchers = container.watcherRepository.getWatchers()
+            loadedWatchers = watchers
+            load(watchers)
+            _uiState.update { it.copy(refreshing = false) }
+        }
+    }
+
+    fun setShowResting(show: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setShowResting(show) }
     }
 
     /** Persists a new home ordering after a drag reorder. */
@@ -192,6 +257,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                                 connection = null,
                                 error = null,
                                 loading = true,
+                                resting = watcher.isResting(),
                             )
                         } else {
                             val existing = prior[watcher.id]
@@ -200,6 +266,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                                 connection = existing?.connection,
                                 error = existing?.error,
                                 loading = false,
+                                resting = watcher.isResting(),
                             )
                         }
                     },
@@ -252,12 +319,23 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             } else {
                 null
             },
+            resting = watcher.isResting(),
         )
     } catch (e: Exception) {
         WatcherConnection(
             watcher = watcher,
             connection = null,
             error = userMessageFor(e),
+            resting = watcher.isResting(),
         )
+    }
+
+    /** Enabled but outside its window right now — cheap to skip, still listed. */
+    private fun Watcher.isResting(): Boolean =
+        enabled && !isActiveAt(LocalDateTime.now())
+
+    private companion object {
+        /** A window boundary is minute-grained, so a minute of lag is invisible. */
+        const val RESTING_TICK_MS = 60_000L
     }
 }

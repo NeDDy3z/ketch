@@ -89,10 +89,12 @@ class ConnectionLookupWorker(
             maxTravelDeltaMinutes = watcher.maxTravelDeltaMinutes,
         ) ?: return Result.success()
 
+        // Ketch owns two strings: the watcher's name, and one line carrying the
+        // whole decision. Everything else is Android's notification chrome.
         container.notificationHelper.notifyConnection(
             watcher,
-            ConnectionFormatter.notificationTitle(best),
-            ConnectionFormatter.notificationText(best),
+            watcher.name,
+            ConnectionFormatter.notificationText(best, now = now),
             ConnectionFormatter.notificationBigText(best),
         )
         container.watcherRepository.markTriggered(watcher.id, now.toEpochMilli())
