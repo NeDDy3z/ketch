@@ -255,8 +255,13 @@ Connections read left-to-right like a departure board:
   surfaceContainerHighest: an identity row (30dp primaryContainer tile, name 13sp/600, primary
   **duration pill**) over the journey laid out as a departure board — times on the outside,
   line chips riding between them, arrival in **tertiary** under an "arrive" label.
-- **Every stop takes an equal share of the width**, and each chip has a 2dp rail segment either
-  side of it. Sizing the columns to their own text instead pushes a middle stop off centre
+- **Every stop takes an equal share of the width**, and the 2dp rail **runs unbroken from one time
+  to the next**, stopping 4dp short of the digits at either end. A stop slot is wider than its
+  time, so the rail continues inside the slot as well as between them — segments only in the leg
+  slots leave a gap before the digits. Those in-slot stubs are also what positions the time: right
+  of a leading stub, left of a trailing one, centred between both, so the stop name below follows
+  the same layout. Square ends, since rounding a 2dp line leaves a seam where stubs meet across a
+  slot boundary. Sizing the columns to their own text instead pushes a middle stop off centre
   whenever the two ends differ in length, which they nearly always do. Glance has no absolute
   positioning, hence segments rather than one continuous line behind the chips — and no weighted
   `defaultWeight`, so the slots cannot be given different shares. Line codes shorten from 6

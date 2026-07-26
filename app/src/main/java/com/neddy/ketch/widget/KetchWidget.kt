@@ -215,6 +215,9 @@ private fun maxLineCode(legs: Int): Int = if (legs >= 3) 4 else 6
 /** Thickness of the track drawn between stops. */
 private val RAIL_THICKNESS = 2.dp
 
+/** Breathing room between the rail and the time it runs up to. */
+private val RAIL_TEXT_GAP = 4.dp
+
 /** Applies [cornerRadius] only where the platform supports it (API 31+). */
 private fun GlanceModifier.roundedCorners(radius: Dp): GlanceModifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) cornerRadius(radius) else this
@@ -488,6 +491,11 @@ private fun JourneyRow(
                     isLast -> TextAlign.End
                     else -> TextAlign.Center
                 },
+                // A stop slot is wider than its time, so the rail has to carry on
+                // inside the slot as well: without this it stops at the slot edge
+                // and leaves a gap before the digits.
+                railBefore = index > 0,
+                railAfter = !isLast,
                 showName = showStopNames,
                 tight = tight,
                 modifier = GlanceModifier.defaultWeight(),
@@ -497,7 +505,9 @@ private fun JourneyRow(
                     Row(
                         modifier = GlanceModifier
                             .defaultWeight()
-                            .padding(top = 2.dp, start = 2.dp, end = 2.dp),
+                            // No horizontal padding: the stubs have to meet the
+                            // ones inside the stop slots across the boundary.
+                            .padding(top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RailSegment(modifier = GlanceModifier.defaultWeight())
@@ -521,11 +531,12 @@ private fun JourneyRow(
  */
 @Composable
 private fun RailSegment(modifier: GlanceModifier) {
+    // Square ends on purpose: rounding a 2dp line leaves a visible seam where one
+    // stub meets the next across a slot boundary.
     Box(
         modifier = modifier
             .height(RAIL_THICKNESS)
-            .background(GlanceTheme.colors.surfaceVariant)
-            .roundedCorners(RAIL_THICKNESS / 2),
+            .background(GlanceTheme.colors.surfaceVariant),
     ) {}
 }
 
@@ -534,26 +545,44 @@ private fun StopColumn(
     stop: WidgetStop,
     isLast: Boolean,
     align: TextAlign,
+    railBefore: Boolean,
+    railAfter: Boolean,
     showName: Boolean,
     tight: Boolean,
     modifier: GlanceModifier,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = stop.time,
-            style = TextStyle(
-                fontSize = if (tight) 12.sp else 13.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = align,
-                color = if (isLast) {
-                    GlanceTheme.colors.tertiary
-                } else {
-                    GlanceTheme.colors.onSurface
-                },
-            ),
-            maxLines = 1,
+        // The stubs take whatever the time leaves, which is also what positions
+        // it: right of a leading stub, left of a trailing one, centred between
+        // both. So the alignment the name follows comes out of the same layout.
+        Row(
             modifier = GlanceModifier.fillMaxWidth(),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (railBefore) {
+                RailSegment(
+                    modifier = GlanceModifier.defaultWeight().padding(end = RAIL_TEXT_GAP),
+                )
+            }
+            Text(
+                text = stop.time,
+                style = TextStyle(
+                    fontSize = if (tight) 12.sp else 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isLast) {
+                        GlanceTheme.colors.tertiary
+                    } else {
+                        GlanceTheme.colors.onSurface
+                    },
+                ),
+                maxLines = 1,
+            )
+            if (railAfter) {
+                RailSegment(
+                    modifier = GlanceModifier.defaultWeight().padding(start = RAIL_TEXT_GAP),
+                )
+            }
+        }
         if (showName) {
             Text(
                 text = if (isLast) "arrive" else stop.name,
