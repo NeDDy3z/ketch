@@ -199,7 +199,10 @@ private fun ConfigContent(
                     },
                 )
                 Text(
-                    text = "Checked watchers appear as swipeable pages.",
+                    // Not "swipeable": a home-screen widget gets no gesture
+                    // callbacks, so the arrows and dots are the only way through.
+                    text = "Checked watchers become pages you step through with " +
+                        "the arrows.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),

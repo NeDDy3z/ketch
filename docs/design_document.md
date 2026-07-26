@@ -171,7 +171,10 @@ Connections read left-to-right like a departure board:
 - Loading: shimmer skeleton cards (1.3s linear) + spinning `progress_activity` in the
   subtitle slot ("Finding connections…").
 - Empty: 104dp `alt_route` primaryContainer tile, "No watchers yet" 22sp/700, body copy,
-  bottom full-width primary button "Create your first watcher" (18dp radius).
+  bottom full-width primary button "Create your first watcher" (18dp radius). **No permission
+  prompt here** — with nothing to watch there is nothing for location or notifications to do yet,
+  and asking before the first watcher exists buries the one thing the screen is for. The card
+  appears at the top of the list as soon as there is a watcher.
 - No connection: inline surfaceContainerHigh panel (16dp radius) with `event_busy`,
   reassurance copy + "open in Google Maps" link, right-aligned "Try again" text button.
   A dead end never ends the card.
@@ -255,17 +258,18 @@ Connections read left-to-right like a departure board:
   surfaceContainerHighest: an identity row (30dp primaryContainer tile, name 13sp/600, primary
   **duration pill**) over the journey laid out as a departure board — times on the outside,
   line chips riding between them, arrival in **tertiary** under an "arrive" label.
-- **Every stop takes an equal share of the width**, and the 2dp rail **runs unbroken from one time
-  to the next**, stopping 4dp short of the digits at either end. A stop slot is wider than its
-  time, so the rail continues inside the slot as well as between them — segments only in the leg
-  slots leave a gap before the digits. Those in-slot stubs are also what positions the time: right
-  of a leading stub, left of a trailing one, centred between both, so the stop name below follows
-  the same layout. Square ends, since rounding a 2dp line leaves a seam where stubs meet across a
-  slot boundary. Sizing the columns to their own text instead pushes a middle stop off centre
-  whenever the two ends differ in length, which they nearly always do. Glance has no absolute
-  positioning, hence segments rather than one continuous line behind the chips — and no weighted
-  `defaultWeight`, so the slots cannot be given different shares. Line codes shorten from 6
-  characters to 4 on a three-leg journey, where each chip gets a third of the room.
+- **Stop columns are a fixed 38dp** — barely wider than the "HH:MM" they hold — and the legs take
+  all the slack, as in the app's own horizontal timeline. Spare width *inside* a column is what
+  throws the chips off centre: an end stop is aligned to one edge so its spare all lands on one
+  side, while a middle stop is centred and splits its spare in two, leaving the first and last
+  chips off by a quarter of the difference. A tight column leaves nothing to split, so every gap
+  is identical, every chip sits between its two times, and a middle stop lands in the middle of
+  the row. Stop names wrap to two lines at that width, again as in the app.
+- The 2dp rail **runs unbroken from one time to the next**, stopping 4dp short of the digits at
+  either end, with square ends — rounding a 2dp line leaves a seam where segments meet. Glance has
+  no absolute positioning, hence segments either side of each chip rather than one continuous line
+  behind them. Line codes shorten from 6 characters to 4 on a three-leg journey, where each chip
+  gets a third of the room.
 - Paging: a 30dp chevron either side, and in the middle the active page as a 16×6 primary pill
   with the rest 6dp dots, each jumping straight to its connection. Arrows carry a **step**, not a
   target page — the click intents outlive the render that built them, so the page they move from

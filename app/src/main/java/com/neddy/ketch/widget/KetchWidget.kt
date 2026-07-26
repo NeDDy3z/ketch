@@ -218,6 +218,18 @@ private val RAIL_THICKNESS = 2.dp
 /** Breathing room between the rail and the time it runs up to. */
 private val RAIL_TEXT_GAP = 4.dp
 
+/**
+ * Width of every stop column — barely wider than the "HH:MM" it holds, and the
+ * legs take all the slack. Any spare width *inside* a column is what throws the
+ * chips off: an end stop is aligned to one edge so its spare width all lands on
+ * one side, while a middle stop is centred and splits its spare in two, leaving
+ * the first and last chips off centre between their times by a quarter of the
+ * difference. Keeping the column tight leaves nothing to split. The stop names
+ * wrap to two lines here, as they do in the app's own timeline.
+ */
+private val STOP_COLUMN_WIDTH = 38.dp
+private val STOP_COLUMN_WIDTH_TIGHT = 34.dp
+
 /** Applies [cornerRadius] only where the platform supports it (API 31+). */
 private fun GlanceModifier.roundedCorners(radius: Dp): GlanceModifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) cornerRadius(radius) else this
@@ -462,9 +474,11 @@ private fun DurationBadge(minutes: Int, tight: Boolean) {
  * the rail is drawn as short segments either side of each chip rather than one
  * continuous line behind them.
  *
- * Every stop takes an equal share of the width. Sizing the columns to their own
- * text instead would push a middle stop off centre whenever the two ends differ
- * in length, which they nearly always do.
+ * Fixed-width stop columns with the legs taking the slack, as in the app's own
+ * horizontal timeline. Giving the stops equal *weight* instead looks the same
+ * until you measure it: the end stops push their whole leftover to one side while
+ * a middle stop splits its leftover in two, so the first and last chips end up
+ * off centre between their times.
  */
 @Composable
 private fun JourneyRow(
@@ -477,6 +491,7 @@ private fun JourneyRow(
     // columns on a 2-cell widget would each be too clipped to read.
     val stops = if (compact) listOf(journey.stops.first(), journey.stops.last()) else journey.stops
     val legs = if (compact) journey.legs.take(1) else journey.legs
+    val stopWidth = if (tight) STOP_COLUMN_WIDTH_TIGHT else STOP_COLUMN_WIDTH
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
@@ -491,23 +506,17 @@ private fun JourneyRow(
                     isLast -> TextAlign.End
                     else -> TextAlign.Center
                 },
-                // A stop slot is wider than its time, so the rail has to carry on
-                // inside the slot as well: without this it stops at the slot edge
-                // and leaves a gap before the digits.
-                railBefore = index > 0,
-                railAfter = !isLast,
                 showName = showStopNames,
                 tight = tight,
-                modifier = GlanceModifier.defaultWeight(),
+                modifier = GlanceModifier.width(stopWidth),
             )
             if (!isLast) {
                 legs.getOrNull(index)?.let { leg ->
                     Row(
                         modifier = GlanceModifier
                             .defaultWeight()
-                            // No horizontal padding: the stubs have to meet the
-                            // ones inside the stop slots across the boundary.
-                            .padding(top = 2.dp),
+                            // Symmetric, so the chip stays centred in the gap.
+                            .padding(top = 2.dp, start = RAIL_TEXT_GAP, end = RAIL_TEXT_GAP),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RailSegment(modifier = GlanceModifier.defaultWeight())
@@ -545,44 +554,26 @@ private fun StopColumn(
     stop: WidgetStop,
     isLast: Boolean,
     align: TextAlign,
-    railBefore: Boolean,
-    railAfter: Boolean,
     showName: Boolean,
     tight: Boolean,
     modifier: GlanceModifier,
 ) {
     Column(modifier = modifier) {
-        // The stubs take whatever the time leaves, which is also what positions
-        // it: right of a leading stub, left of a trailing one, centred between
-        // both. So the alignment the name follows comes out of the same layout.
-        Row(
+        Text(
+            text = stop.time,
+            style = TextStyle(
+                fontSize = if (tight) 12.sp else 13.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = align,
+                color = if (isLast) {
+                    GlanceTheme.colors.tertiary
+                } else {
+                    GlanceTheme.colors.onSurface
+                },
+            ),
+            maxLines = 1,
             modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (railBefore) {
-                RailSegment(
-                    modifier = GlanceModifier.defaultWeight().padding(end = RAIL_TEXT_GAP),
-                )
-            }
-            Text(
-                text = stop.time,
-                style = TextStyle(
-                    fontSize = if (tight) 12.sp else 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isLast) {
-                        GlanceTheme.colors.tertiary
-                    } else {
-                        GlanceTheme.colors.onSurface
-                    },
-                ),
-                maxLines = 1,
-            )
-            if (railAfter) {
-                RailSegment(
-                    modifier = GlanceModifier.defaultWeight().padding(start = RAIL_TEXT_GAP),
-                )
-            }
-        }
+        )
         if (showName) {
             Text(
                 text = if (isLast) "arrive" else stop.name,
@@ -591,7 +582,7 @@ private fun StopColumn(
                     textAlign = align,
                     color = GlanceTheme.colors.onSurfaceVariant,
                 ),
-                maxLines = 1,
+                maxLines = 2,
                 modifier = GlanceModifier.fillMaxWidth(),
             )
         }

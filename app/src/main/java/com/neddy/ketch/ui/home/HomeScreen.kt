@@ -778,10 +778,7 @@ private fun NormalContent(
     onEnableWatcher: (Watcher) -> Unit,
 ) {
     if (!state.loading && !state.hasWatchers) {
-        EmptyState(
-            onCreateWatcher = onCreateWatcher,
-            onRefresh = onRefresh,
-        )
+        EmptyState(onCreateWatcher = onCreateWatcher, topInset = topInset)
         return
     }
 
@@ -876,10 +873,16 @@ private fun NormalContent(
     }
 }
 
+/**
+ * No permission prompt here on purpose: with nothing to watch there is nothing
+ * for location or notifications to do yet, and asking before the first watcher
+ * exists buries the one thing this screen is for. The card appears at the top of
+ * the list as soon as there is a watcher.
+ */
 @Composable
 private fun EmptyState(
     onCreateWatcher: () -> Unit,
-    onRefresh: () -> Unit,
+    topInset: Dp,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -887,11 +890,7 @@ private fun EmptyState(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
         ) {
-            PermissionsSection(
-                onGranted = onRefresh,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
-            )
-            Spacer(modifier = Modifier.height(44.dp))
+            Spacer(modifier = Modifier.height(topInset + 44.dp))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
