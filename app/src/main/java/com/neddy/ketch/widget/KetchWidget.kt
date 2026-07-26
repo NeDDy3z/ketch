@@ -24,7 +24,6 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.components.CircleIconButton
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -43,6 +42,7 @@ import androidx.glance.layout.width
 import androidx.glance.material3.ColorProviders
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import com.neddy.ketch.MainActivity
 import com.neddy.ketch.R
@@ -205,8 +205,15 @@ private val TITLE_MIN_WIDTH = 200.dp
 /** Below this the journey keeps only its two ends and one chip. */
 private val FULL_JOURNEY_MIN_WIDTH = 250.dp
 
-/** Longest line code a chip can carry before it crowds the rail. */
-private const val MAX_LINE_CODE = 6
+/**
+ * Longest line code a chip can carry before it crowds the rail. Every stop takes
+ * an equal share of the width, so a three-leg journey leaves each chip about a
+ * third of the room a direct one gets and has to give up characters for it.
+ */
+private fun maxLineCode(legs: Int): Int = if (legs >= 3) 4 else 6
+
+/** Thickness of the track drawn between stops. */
+private val RAIL_THICKNESS = 2.dp
 
 /** Applies [cornerRadius] only where the platform supports it (API 31+). */
 private fun GlanceModifier.roundedCorners(radius: Dp): GlanceModifier =
@@ -451,6 +458,10 @@ private fun DurationBadge(minutes: Int, tight: Boolean) {
  * Times on the outside, chips between. Glance has no absolute positioning, so
  * the rail is drawn as short segments either side of each chip rather than one
  * continuous line behind them.
+ *
+ * Every stop takes an equal share of the width. Sizing the columns to their own
+ * text instead would push a middle stop off centre whenever the two ends differ
+ * in length, which they nearly always do.
  */
 @Composable
 private fun JourneyRow(
@@ -472,17 +483,30 @@ private fun JourneyRow(
             StopColumn(
                 stop = stop,
                 isLast = isLast,
-                alignEnd = isLast,
+                align = when {
+                    index == 0 -> TextAlign.Start
+                    isLast -> TextAlign.End
+                    else -> TextAlign.Center
+                },
                 showName = showStopNames,
                 tight = tight,
+                modifier = GlanceModifier.defaultWeight(),
             )
             if (!isLast) {
                 legs.getOrNull(index)?.let { leg ->
-                    Box(
-                        modifier = GlanceModifier.defaultWeight().padding(top = 2.dp),
-                        contentAlignment = Alignment.Center,
+                    Row(
+                        modifier = GlanceModifier
+                            .defaultWeight()
+                            .padding(top = 2.dp, start = 2.dp, end = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        LegChip(leg = leg, more = compact && journey.legs.size > 1)
+                        RailSegment(modifier = GlanceModifier.defaultWeight())
+                        LegChip(
+                            leg = leg,
+                            more = compact && journey.legs.size > 1,
+                            maxCode = maxLineCode(legs.size),
+                        )
+                        RailSegment(modifier = GlanceModifier.defaultWeight())
                     }
                 }
             }
@@ -490,22 +514,37 @@ private fun JourneyRow(
     }
 }
 
+/**
+ * The track either side of a leg chip, tying the stops together. Takes the
+ * weight from its caller: `defaultWeight` is Row-scoped and does not survive
+ * being moved into a composable of its own.
+ */
+@Composable
+private fun RailSegment(modifier: GlanceModifier) {
+    Box(
+        modifier = modifier
+            .height(RAIL_THICKNESS)
+            .background(GlanceTheme.colors.surfaceVariant)
+            .roundedCorners(RAIL_THICKNESS / 2),
+    ) {}
+}
+
 @Composable
 private fun StopColumn(
     stop: WidgetStop,
     isLast: Boolean,
-    alignEnd: Boolean,
+    align: TextAlign,
     showName: Boolean,
     tight: Boolean,
+    modifier: GlanceModifier,
 ) {
-    Column(
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
-    ) {
+    Column(modifier = modifier) {
         Text(
             text = stop.time,
             style = TextStyle(
                 fontSize = if (tight) 12.sp else 13.sp,
                 fontWeight = FontWeight.Bold,
+                textAlign = align,
                 color = if (isLast) {
                     GlanceTheme.colors.tertiary
                 } else {
@@ -513,27 +552,30 @@ private fun StopColumn(
                 },
             ),
             maxLines = 1,
+            modifier = GlanceModifier.fillMaxWidth(),
         )
         if (showName) {
             Text(
                 text = if (isLast) "arrive" else stop.name,
                 style = TextStyle(
                     fontSize = 10.sp,
+                    textAlign = align,
                     color = GlanceTheme.colors.onSurfaceVariant,
                 ),
                 maxLines = 1,
+                modifier = GlanceModifier.fillMaxWidth(),
             )
         }
     }
 }
 
 @Composable
-private fun LegChip(leg: WidgetLeg, more: Boolean) {
+private fun LegChip(leg: WidgetLeg, more: Boolean, maxCode: Int) {
     Row(
         modifier = GlanceModifier
             .background(GlanceTheme.colors.surfaceVariant)
             .roundedCorners(999.dp)
-            .padding(horizontal = 6.dp, vertical = 1.dp),
+            .padding(horizontal = 5.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
@@ -546,7 +588,7 @@ private fun LegChip(leg: WidgetLeg, more: Boolean) {
         Text(
             // Provider line names run long ("Slovak Rail 115"); a chip riding a
             // rail has room for a code, not a sentence.
-            text = leg.lineCode.take(MAX_LINE_CODE) + if (more) " +" else "",
+            text = leg.lineCode.take(maxCode) + if (more) " +" else "",
             style = TextStyle(
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
@@ -584,20 +626,63 @@ private fun vehicleGlyph(vehicleType: String): Int = when (vehicleType.uppercase
 }
 
 /**
- * Page indicators. A home-screen widget cannot receive a swipe — RemoteViews has
- * no pager and no gesture callbacks — so the dots are the navigation: each jumps
- * straight to its connection and carries a full-height tap target.
+ * Arrows either side of the page indicators. A home-screen widget cannot receive
+ * a swipe — RemoteViews has no pager and no gesture callbacks — so stepping has
+ * to be a tap: the arrows move one connection, the dots jump straight to one.
  */
 @Composable
 private fun PagerBar(count: Int, page: Int) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
+            .padding(top = 2.dp, start = 9.dp, end = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        repeat(count) { index -> PagerDot(index = index, active = index == page) }
+        PagerArrow(
+            icon = R.drawable.ic_widget_chevron_left,
+            description = "Previous connection",
+            step = -1,
+        )
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            repeat(count) { index -> PagerDot(index = index, active = index == page) }
+        }
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        PagerArrow(
+            icon = R.drawable.ic_widget_chevron_right,
+            description = "Next connection",
+            step = 1,
+        )
+    }
+}
+
+/**
+ * The arrows carry a step, not a target page: the click intents outlive the
+ * render they were built in, so the page they move from is read when the click
+ * arrives instead of being baked in.
+ *
+ * A plain clickable box rather than CircleIconButton, for the same reason the
+ * refresh button is one — the button's hit area did not line up with what it
+ * drew, so taps fell through to the page behind and opened the app.
+ */
+@Composable
+private fun PagerArrow(icon: Int, description: String, step: Int) {
+    Box(
+        modifier = GlanceModifier
+            .size(30.dp)
+            .clickable(
+                actionRunCallback<StepPageAction>(
+                    actionParametersOf(StepPageAction.STEP to step),
+                ),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            provider = ImageProvider(icon),
+            contentDescription = description,
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurfaceVariant),
+            modifier = GlanceModifier.size(18.dp),
+        )
     }
 }
 

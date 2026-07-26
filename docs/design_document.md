@@ -129,6 +129,13 @@ Connections read left-to-right like a departure board:
   `GraphicsLayer` that the header re-draws through a `BlurEffect`), masked by a vertical fade so
   the blur and the tonal wash both die out before the bottom edge — the list stays continuous
   rather than emerging from under a bar. Below API 31 the gradient carries it alone.
+- The fade runs from the full background colour at the status bar to nothing at all at the bottom
+  edge, eased rather than linear: a straight ramp is already down to 40% behind the title, which
+  the cards passing under show through. The header's bottom padding is the runway the fade needs,
+  so it is not free to shrink.
+- The header sits directly under the status bar. The Scaffold has no top bar in this mode, so its
+  top inset must not be consumed by the content — the header applies `statusBarsPadding` itself,
+  and taking the inset twice both pushes the title down and leaves a flat band above the blur.
 - The large "Ketch" title (33sp) shrinks to 19sp once the list has moved. Only "Finding
   connections…" occupies the second line; there is no watcher count.
 - Watcher cards per §5. FAB 64dp / 20dp radius, primaryContainer, `add` 28dp.
@@ -248,16 +255,25 @@ Connections read left-to-right like a departure board:
   surfaceContainerHighest: an identity row (30dp primaryContainer tile, name 13sp/600, primary
   **duration pill**) over the journey laid out as a departure board — times on the outside,
   line chips riding between them, arrival in **tertiary** under an "arrive" label.
-- The panel pages via the indicators alone, as in the spec: the active page is a 16×6 primary
-  pill, the rest 6dp dots, each with padding folded into its tap target so it jumps straight to
-  its connection. *The spec shows a swipe. RemoteViews has no pager and receives no gesture
-  callbacks, so a home-screen widget cannot be swiped — the dots are the navigation.*
+- **Every stop takes an equal share of the width**, and each chip has a 2dp rail segment either
+  side of it. Sizing the columns to their own text instead pushes a middle stop off centre
+  whenever the two ends differ in length, which they nearly always do. Glance has no absolute
+  positioning, hence segments rather than one continuous line behind the chips — and no weighted
+  `defaultWeight`, so the slots cannot be given different shares. Line codes shorten from 6
+  characters to 4 on a three-leg journey, where each chip gets a third of the room.
+- Paging: a 30dp chevron either side, and in the middle the active page as a 16×6 primary pill
+  with the rest 6dp dots, each jumping straight to its connection. Arrows carry a **step**, not a
+  target page — the click intents outlive the render that built them, so the page they move from
+  is read when the click arrives. *The spec shows a swipe. RemoteViews has no pager and receives
+  no gesture callbacks, so a home-screen widget cannot be swiped; the arrows and dots are the
+  navigation.*
 - **The widget is sized in tiers**, not drawn once and clipped: full (tile, stop names, page
   dots), medium (no tile, no stop names), and compact for a 2×1 cell (no header either, tighter
   padding and type, just the name, the duration and the two ends).
-- Refresh is a plain clickable box rather than `CircleIconButton`, whose hit area did not match
-  what it drew, and it swaps in a "Refreshing…" label while the lookup runs, since a widget
-  cannot animate a spinner.
+- Refresh and the pager arrows are plain clickable boxes rather than `CircleIconButton`, whose hit
+  area did not match what it drew, so taps fell through to the page behind and opened the app.
+  Refresh swaps in a "Refreshing…" label while the lookup runs, since a widget cannot animate a
+  spinner.
 - Glance renders in a remote process and can only use drawable resources, so the watcher icons
   and vehicle glyphs have resource twins under `res/drawable/ic_watcher_*` and `ic_vehicle_*`.
   The header logo, notification glyph and adaptive icon are all the one Ketch mark.

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -112,6 +114,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -146,9 +149,14 @@ private val REORDER_ROW_RADIUS = 24.dp
 private val CONTEXTUAL_BAR_HEIGHT = 52.dp
 private val CONTEXTUAL_BAR_ACTION_SIZE = 40.dp
 
-/** Where the header's blur and wash start giving way to the list beneath. */
-private const val HEADER_FADE_START = 0.58f
-private const val HEADER_BLUR_RADIUS = 26f
+private const val HEADER_BLUR_RADIUS = 58f
+
+/**
+ * The header's fade: full background colour at the status bar, nothing at all by
+ * the bottom edge. Eased rather than a straight line — a linear ramp is already
+ * down to 40% behind the title, which the cards passing under show through.
+ */
+private val HEADER_FADE_STOPS = floatArrayOf(1f, 0.97f, 0.86f, 0.6f, 0.24f, 0f)
 private const val EXPANDED_TITLE_SP = 33f
 private const val COLLAPSED_TITLE_SP = 19f
 
@@ -294,7 +302,19 @@ fun HomeScreen(
                 val backdrop = rememberGraphicsLayer()
                 var headerHeight by remember { mutableStateOf(0.dp) }
                 val density = LocalDensity.current
-                Box(modifier = contentModifier) {
+                val layoutDirection = LocalLayoutDirection.current
+                // The Scaffold has no top bar here, so its top inset is the
+                // status bar — which the header insets itself. Taking it twice
+                // pushed the title down and left a flat band above the blur.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = padding.calculateStartPadding(layoutDirection),
+                            end = padding.calculateEndPadding(layoutDirection),
+                            bottom = padding.calculateBottomPadding(),
+                        ),
+                ) {
                     PullToRefreshBox(
                         isRefreshing = state.refreshing,
                         onRefresh = viewModel::refresh,
@@ -385,25 +405,22 @@ private fun HomeHeader(
                         drawLayer(backdrop)
                         drawRect(
                             brush = Brush.verticalGradient(
-                                0f to Color.Black,
-                                HEADER_FADE_START to Color.Black,
-                                1f to Color.Transparent,
+                                colors = HEADER_FADE_STOPS.map { Color.Black.copy(alpha = it) },
                             ),
                             blendMode = BlendMode.DstIn,
                         )
                     },
             )
         }
-        // Tonal wash over the blur: solid at the status bar, gone by the bottom
-        // edge, so cards emerge rather than appearing from behind a band.
+        // Tonal wash over the blur, ramping from the full background colour at
+        // the status bar down to nothing at the bottom edge, so cards emerge
+        // rather than appearing from behind a band.
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to surface,
-                        HEADER_FADE_START to surface.copy(alpha = 0.82f),
-                        1f to Color.Transparent,
+                        colors = HEADER_FADE_STOPS.map { surface.copy(alpha = it) },
                     ),
                 ),
         )
@@ -411,7 +428,9 @@ private fun HomeHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 26.dp),
+                // The bottom padding is the fade's runway: the shorter it is, the
+                // less room the gradient has to reach nothing.
+                .padding(start = 20.dp, end = 8.dp, bottom = 34.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
