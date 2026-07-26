@@ -124,10 +124,13 @@ Connections read left-to-right like a departure board:
 ## 6. Per-screen rules
 
 ### Home
-- No top app bar chrome: a pinned surface header with the large "Ketch" title inline with the
-  end-aligned action row (`sync`, `settings` icon buttons, 44dp circular, onSurfaceVariant),
-  "N watchers" / "Finding connections…" on the line beneath. The header stays put while the
-  list scrolls under it.
+- No top app bar chrome and **no opaque band**: the header floats over the list. On API 31+ it
+  draws a blurred copy of the cards passing underneath (the list records itself into a
+  `GraphicsLayer` that the header re-draws through a `BlurEffect`), masked by a vertical fade so
+  the blur and the tonal wash both die out before the bottom edge — the list stays continuous
+  rather than emerging from under a bar. Below API 31 the gradient carries it alone.
+- The large "Ketch" title (33sp) shrinks to 19sp once the list has moved. Only "Finding
+  connections…" occupies the second line; there is no watcher count.
 - Watcher cards per §5. FAB 64dp / 20dp radius, primaryContainer, `add` 28dp.
 - Double tapping a card hands the route to Google Maps as public transport directions to the
   watcher destination, when the gesture is enabled in Settings → Gestures.
@@ -147,7 +150,10 @@ Connections read left-to-right like a departure board:
   shadow, 1.03 scale, a primary handle and tile, and reads "Dragging · position N of M"; the
   slot it will drop into shows as a dashed outline over a primary @8% wash. The bar's action is
   a filled primary **Done** pill, and a `swipe_vertical` chip at the bottom says the order
-  saves on drop.
+  saves on drop. **Long-pressing anywhere on a row lifts it** — the handle is an affordance,
+  not the only target.
+- Both contextual bars are pinned to one shared height, so switching modes never changes the
+  bar's size.
 - **Multi-select**: selected rows take a **secondaryContainer** tint with a 2dp primary
   outline, a 22dp square checkbox (7dp radius, filled primary with a check) and an icon tile
   that flips to surfaceContainerLowest with a primary glyph. The bar carries a live count in
@@ -242,10 +248,16 @@ Connections read left-to-right like a departure board:
   surfaceContainerHighest: an identity row (30dp primaryContainer tile, name 13sp/600, primary
   **duration pill**) over the journey laid out as a departure board — times on the outside,
   line chips riding between them, arrival in **tertiary** under an "arrive" label.
-- The panel pages between watchers with 28dp chevrons on the edges (wrapping around) and
-  indicators between them: the active page is a 16×6 primary pill, the rest 6dp dots, and each
-  jumps straight to its connection. *The spec shows swipe with dots only; RemoteViews has no
-  pager and cannot receive a swipe, so the chevrons are the navigation.*
+- The panel pages via the indicators alone, as in the spec: the active page is a 16×6 primary
+  pill, the rest 6dp dots, each with padding folded into its tap target so it jumps straight to
+  its connection. *The spec shows a swipe. RemoteViews has no pager and receives no gesture
+  callbacks, so a home-screen widget cannot be swiped — the dots are the navigation.*
+- **The widget is sized in tiers**, not drawn once and clipped: full (tile, stop names, page
+  dots), medium (no tile, no stop names), and compact for a 2×1 cell (no header either, tighter
+  padding and type, just the name, the duration and the two ends).
+- Refresh is a plain clickable box rather than `CircleIconButton`, whose hit area did not match
+  what it drew, and it swaps in a "Refreshing…" label while the lookup runs, since a widget
+  cannot animate a spinner.
 - Glance renders in a remote process and can only use drawable resources, so the watcher icons
   and vehicle glyphs have resource twins under `res/drawable/ic_watcher_*` and `ic_vehicle_*`.
   The header logo, notification glyph and adaptive icon are all the one Ketch mark.

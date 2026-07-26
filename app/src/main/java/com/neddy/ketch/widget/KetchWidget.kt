@@ -165,6 +165,7 @@ class KetchWidget : GlanceAppWidget() {
         // states and must not share a message.
         val allResting = entries.isEmpty() &&
             WidgetPrefs.selectedWatchers(context, appWidgetId).isNotEmpty()
+        val refreshing = WidgetPrefs.isRefreshing(context)
         // A watcher can disappear between two renders, so the stored page is
         // clamped instead of trusted.
         val page = WidgetPrefs.page(context, appWidgetId)
@@ -178,22 +179,38 @@ class KetchWidget : GlanceAppWidget() {
                     palette = palette,
                     theme = theme,
                     allResting = allResting,
+                    refreshing = refreshing,
                 )
             }
         }
     }
 }
 
+/**
+ * How much of the widget is drawn at the size the user has dragged it to. The
+ * widget is resizable down to a 2x1 cell, so each tier drops what no longer
+ * fits instead of letting the layout overflow and clip.
+ */
+private enum class WidgetTier { COMPACT, MEDIUM, FULL }
+
+private fun tierFor(height: Dp): WidgetTier = when {
+    height >= 150.dp -> WidgetTier.FULL
+    height >= 112.dp -> WidgetTier.MEDIUM
+    else -> WidgetTier.COMPACT
+}
+
+/** The wordmark is the first thing dropped when the widget is narrow. */
+private val TITLE_MIN_WIDTH = 200.dp
+
+/** Below this the journey keeps only its two ends and one chip. */
+private val FULL_JOURNEY_MIN_WIDTH = 250.dp
+
+/** Longest line code a chip can carry before it crowds the rail. */
+private const val MAX_LINE_CODE = 6
+
 /** Applies [cornerRadius] only where the platform supports it (API 31+). */
 private fun GlanceModifier.roundedCorners(radius: Dp): GlanceModifier =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) cornerRadius(radius) else this
-
-/**
- * How many journey lines fit next to the header and the pager bar. Header,
- * pager and panel padding take about 104dp, every journey line about 17dp.
- */
-private fun journeyLines(size: DpSize): Int =
-    ((size.height - 104.dp) / 17.dp).toInt().coerceIn(1, 8)
 
 @Composable
 private fun WidgetContent(
@@ -203,37 +220,49 @@ private fun WidgetContent(
     palette: ColorPalette,
     theme: WidgetTheme,
     allResting: Boolean,
+    refreshing: Boolean,
 ) {
     val size = LocalSize.current
+    val tier = tierFor(size.height)
+    val compact = size.width < FULL_JOURNEY_MIN_WIDTH
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(panelBackground(palette, theme))
             .roundedCorners(26.dp)
-            .padding(top = 14.dp, bottom = 11.dp),
+            .padding(
+                top = if (tier == WidgetTier.COMPACT) 8.dp else 14.dp,
+                bottom = if (tier == WidgetTier.COMPACT) 8.dp else 11.dp,
+            ),
     ) {
-        // The wordmark is the first thing dropped when the widget is narrow.
-        WidgetHeader(appWidgetId = appWidgetId, showTitle = size.width >= 200.dp)
+        if (tier != WidgetTier.COMPACT) {
+            WidgetHeader(
+                appWidgetId = appWidgetId,
+                showTitle = size.width >= TITLE_MIN_WIDTH,
+                refreshing = refreshing,
+            )
+        }
         Box(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
             if (entries.isEmpty()) {
                 EmptyCard(appWidgetId = appWidgetId, allResting = allResting)
             } else {
                 WatcherCard(
                     entry = entries[page],
-                    journeyLines = journeyLines(size),
                     palette = palette,
                     theme = theme,
+                    tier = tier,
+                    compact = compact,
                 )
             }
         }
-        if (entries.size > 1) {
+        if (entries.size > 1 && tier != WidgetTier.COMPACT) {
             PagerBar(count = entries.size, page = page)
         }
     }
 }
 
 @Composable
-private fun WidgetHeader(appWidgetId: Int, showTitle: Boolean) {
+private fun WidgetHeader(appWidgetId: Int, showTitle: Boolean, refreshing: Boolean) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -257,37 +286,48 @@ private fun WidgetHeader(appWidgetId: Int, showTitle: Boolean) {
         }
         if (showTitle) {
             Spacer(modifier = GlanceModifier.width(9.dp))
-            Column {
-                Text(
-                    text = "Ketch",
-                    style = TextStyle(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = GlanceTheme.colors.onSurface,
-                    ),
-                    maxLines = 1,
-                )
-                // The logo tile is the only non-obvious target on the widget,
-                // so it says what it does.
-                Text(
-                    text = "logo \u2192 widget settings",
-                    style = TextStyle(
-                        fontSize = 10.sp,
-                        color = GlanceTheme.colors.onSurfaceVariant,
-                    ),
-                    maxLines = 1,
-                )
-            }
+            Text(
+                text = "Ketch",
+                style = TextStyle(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = GlanceTheme.colors.onSurface,
+                ),
+                maxLines = 1,
+            )
         }
         Spacer(modifier = GlanceModifier.defaultWeight())
-        CircleIconButton(
-            imageProvider = ImageProvider(R.drawable.ic_widget_refresh),
-            contentDescription = "Refresh",
-            onClick = actionRunCallback<RefreshWidgetAction>(),
-            backgroundColor = GlanceTheme.colors.surfaceVariant,
-            contentColor = GlanceTheme.colors.primary,
-            modifier = GlanceModifier.size(32.dp),
-        )
+        if (refreshing) {
+            // Tapping the widget cannot show a spinner, so the label stands in
+            // for one until the lookup lands and the widget re-renders.
+            Text(
+                text = "Refreshing\u2026",
+                style = TextStyle(
+                    fontSize = 11.sp,
+                    color = GlanceTheme.colors.onSurfaceVariant,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.padding(end = 4.dp),
+            )
+        }
+        // A plain clickable box rather than CircleIconButton: the button's own
+        // hit area did not line up with what it drew, so taps fell through to
+        // the page behind it and opened the app instead of refreshing.
+        Box(
+            modifier = GlanceModifier
+                .size(36.dp)
+                .background(GlanceTheme.colors.surfaceVariant)
+                .roundedCorners(18.dp)
+                .clickable(actionRunCallback<RefreshWidgetAction>()),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_refresh),
+                contentDescription = "Refresh",
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.primary),
+                modifier = GlanceModifier.size(18.dp),
+            )
+        }
     }
 }
 
@@ -302,40 +342,56 @@ private fun openWidgetSettings(appWidgetId: Int) = actionStartActivity<WidgetCon
  * riding the rail between them, arrival in tertiary.
  */
 @Composable
-private fun WatcherCard(entry: WidgetEntry, journeyLines: Int, palette: ColorPalette, theme: WidgetTheme) {
-    Box(modifier = GlanceModifier.padding(horizontal = 15.dp)) {
+private fun WatcherCard(
+    entry: WidgetEntry,
+    palette: ColorPalette,
+    theme: WidgetTheme,
+    tier: WidgetTier,
+    compact: Boolean,
+) {
+    val tight = tier == WidgetTier.COMPACT
+    Box(modifier = GlanceModifier.padding(horizontal = if (tight) 10.dp else 15.dp)) {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(innerCardBackground(palette, theme))
-                .roundedCorners(18.dp)
+                .roundedCorners(if (tight) 14.dp else 18.dp)
                 .clickable(actionStartActivity<MainActivity>())
-                .padding(vertical = 12.dp, horizontal = 13.dp),
+                .padding(
+                    vertical = if (tight) 7.dp else 12.dp,
+                    horizontal = if (tight) 10.dp else 13.dp,
+                ),
         ) {
             Row(
                 modifier = GlanceModifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = GlanceModifier
-                        .size(30.dp)
-                        .background(GlanceTheme.colors.primaryContainer)
-                        .roundedCorners(10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(
-                        provider = ImageProvider(widgetIcon(entry.icon)),
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimaryContainer),
-                        modifier = GlanceModifier.size(17.dp),
-                    )
+                // The tile is the first thing to go: at a 2x1 cell the name and
+                // the duration are what a glance is actually for.
+                if (tier == WidgetTier.FULL) {
+                    Box(
+                        modifier = GlanceModifier
+                            .size(30.dp)
+                            .background(GlanceTheme.colors.primaryContainer)
+                            .roundedCorners(10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            provider = ImageProvider(widgetIcon(entry.icon)),
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(
+                                GlanceTheme.colors.onPrimaryContainer,
+                            ),
+                            modifier = GlanceModifier.size(17.dp),
+                        )
+                    }
+                    Spacer(modifier = GlanceModifier.width(9.dp))
                 }
-                Spacer(modifier = GlanceModifier.width(9.dp))
                 Text(
                     text = entry.name,
                     style = TextStyle(
                         fontWeight = FontWeight.Medium,
-                        fontSize = 13.sp,
+                        fontSize = if (tight) 12.sp else 13.sp,
                         color = GlanceTheme.colors.onSurface,
                     ),
                     maxLines = 1,
@@ -344,10 +400,10 @@ private fun WatcherCard(entry: WidgetEntry, journeyLines: Int, palette: ColorPal
                 val journey = entry.journey
                 if (journey != null) {
                     Spacer(modifier = GlanceModifier.width(6.dp))
-                    DurationBadge(minutes = journey.durationMinutes)
+                    DurationBadge(minutes = journey.durationMinutes, tight = tight)
                 }
             }
-            Spacer(modifier = GlanceModifier.height(11.dp))
+            Spacer(modifier = GlanceModifier.height(if (tight) 5.dp else 11.dp))
             val journey = entry.journey
             if (journey == null) {
                 Text(
@@ -356,10 +412,15 @@ private fun WatcherCard(entry: WidgetEntry, journeyLines: Int, palette: ColorPal
                         fontSize = 12.sp,
                         color = GlanceTheme.colors.onSurfaceVariant,
                     ),
-                    maxLines = journeyLines,
+                    maxLines = if (tight) 1 else 3,
                 )
             } else {
-                JourneyRow(journey = journey)
+                JourneyRow(
+                    journey = journey,
+                    showStopNames = tier == WidgetTier.FULL,
+                    compact = compact,
+                    tight = tight,
+                )
             }
         }
     }
@@ -367,17 +428,17 @@ private fun WatcherCard(entry: WidgetEntry, journeyLines: Int, palette: ColorPal
 
 /** The loudest thing on the page, as in the app's cards. */
 @Composable
-private fun DurationBadge(minutes: Int) {
+private fun DurationBadge(minutes: Int, tight: Boolean) {
     Box(
         modifier = GlanceModifier
             .background(GlanceTheme.colors.primary)
             .roundedCorners(999.dp)
-            .padding(horizontal = 9.dp, vertical = 3.dp),
+            .padding(horizontal = if (tight) 7.dp else 9.dp, vertical = if (tight) 2.dp else 3.dp),
     ) {
         Text(
             text = "$minutes min",
             style = TextStyle(
-                fontSize = 11.sp,
+                fontSize = if (tight) 10.sp else 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = GlanceTheme.colors.onPrimary,
             ),
@@ -392,24 +453,37 @@ private fun DurationBadge(minutes: Int) {
  * continuous line behind them.
  */
 @Composable
-private fun JourneyRow(journey: WidgetJourney) {
+private fun JourneyRow(
+    journey: WidgetJourney,
+    showStopNames: Boolean,
+    compact: Boolean,
+    tight: Boolean,
+) {
+    // Narrow widgets keep only the two ends and a single chip: three stop
+    // columns on a 2-cell widget would each be too clipped to read.
+    val stops = if (compact) listOf(journey.stops.first(), journey.stops.last()) else journey.stops
+    val legs = if (compact) journey.legs.take(1) else journey.legs
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
     ) {
-        journey.stops.forEachIndexed { index, stop ->
-            val isLast = index == journey.stops.lastIndex
+        stops.forEachIndexed { index, stop ->
+            val isLast = index == stops.lastIndex
             StopColumn(
                 stop = stop,
                 isLast = isLast,
                 alignEnd = isLast,
+                showName = showStopNames,
+                tight = tight,
             )
-            journey.legs.getOrNull(index)?.let { leg ->
-                Box(
-                    modifier = GlanceModifier.defaultWeight().padding(top = 2.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    LegChip(leg = leg)
+            if (!isLast) {
+                legs.getOrNull(index)?.let { leg ->
+                    Box(
+                        modifier = GlanceModifier.defaultWeight().padding(top = 2.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        LegChip(leg = leg, more = compact && journey.legs.size > 1)
+                    }
                 }
             }
         }
@@ -417,14 +491,20 @@ private fun JourneyRow(journey: WidgetJourney) {
 }
 
 @Composable
-private fun StopColumn(stop: WidgetStop, isLast: Boolean, alignEnd: Boolean) {
+private fun StopColumn(
+    stop: WidgetStop,
+    isLast: Boolean,
+    alignEnd: Boolean,
+    showName: Boolean,
+    tight: Boolean,
+) {
     Column(
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
     ) {
         Text(
             text = stop.time,
             style = TextStyle(
-                fontSize = 13.sp,
+                fontSize = if (tight) 12.sp else 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isLast) {
                     GlanceTheme.colors.tertiary
@@ -434,19 +514,21 @@ private fun StopColumn(stop: WidgetStop, isLast: Boolean, alignEnd: Boolean) {
             ),
             maxLines = 1,
         )
-        Text(
-            text = if (isLast) "arrive" else stop.name,
-            style = TextStyle(
-                fontSize = 10.sp,
-                color = GlanceTheme.colors.onSurfaceVariant,
-            ),
-            maxLines = 1,
-        )
+        if (showName) {
+            Text(
+                text = if (isLast) "arrive" else stop.name,
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    color = GlanceTheme.colors.onSurfaceVariant,
+                ),
+                maxLines = 1,
+            )
+        }
     }
 }
 
 @Composable
-private fun LegChip(leg: WidgetLeg) {
+private fun LegChip(leg: WidgetLeg, more: Boolean) {
     Row(
         modifier = GlanceModifier
             .background(GlanceTheme.colors.surfaceVariant)
@@ -462,7 +544,9 @@ private fun LegChip(leg: WidgetLeg) {
         )
         Spacer(modifier = GlanceModifier.width(2.dp))
         Text(
-            text = leg.lineCode,
+            // Provider line names run long ("Slovak Rail 115"); a chip riding a
+            // rail has room for a code, not a sentence.
+            text = leg.lineCode.take(MAX_LINE_CODE) + if (more) " +" else "",
             style = TextStyle(
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
@@ -500,60 +584,30 @@ private fun vehicleGlyph(vehicleType: String): Int = when (vehicleType.uppercase
 }
 
 /**
- * Pager controls for the connections: chevrons on the edges wrapping around,
- * dots in the middle that jump straight to a connection.
+ * Page indicators. A home-screen widget cannot receive a swipe — RemoteViews has
+ * no pager and no gesture callbacks — so the dots are the navigation: each jumps
+ * straight to its connection and carries a full-height tap target.
  */
 @Composable
 private fun PagerBar(count: Int, page: Int) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(top = 6.dp, start = 9.dp, end = 9.dp),
+            .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PagerArrow(
-            icon = R.drawable.ic_widget_chevron_left,
-            description = "Previous connection",
-            step = -1,
-        )
-        Spacer(modifier = GlanceModifier.defaultWeight())
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            repeat(count) { index -> PagerDot(index = index, active = index == page) }
-        }
-        Spacer(modifier = GlanceModifier.defaultWeight())
-        PagerArrow(
-            icon = R.drawable.ic_widget_chevron_right,
-            description = "Next connection",
-            step = 1,
-        )
+        repeat(count) { index -> PagerDot(index = index, active = index == page) }
     }
-}
-
-/**
- * The arrows carry a step, not a target page: the click intents outlive the
- * render they were built in, so the page they move from is read when the
- * click arrives instead of being baked in.
- */
-@Composable
-private fun PagerArrow(icon: Int, description: String, step: Int) {
-    CircleIconButton(
-        imageProvider = ImageProvider(icon),
-        contentDescription = description,
-        onClick = actionRunCallback<StepPageAction>(
-            actionParametersOf(StepPageAction.STEP to step),
-        ),
-        backgroundColor = null,
-        contentColor = GlanceTheme.colors.onSurfaceVariant,
-        modifier = GlanceModifier.size(28.dp),
-    )
 }
 
 @Composable
 private fun PagerDot(index: Int, active: Boolean) {
     // The active page reads as a short pill, the rest as dots.
     Box(
+        // Padding is part of the target: a 6dp dot alone is not tappable.
         modifier = GlanceModifier
-            .padding(horizontal = 3.dp)
+            .padding(horizontal = 7.dp, vertical = 5.dp)
             .clickable(showPage(index)),
         contentAlignment = Alignment.Center,
     ) {
@@ -629,6 +683,9 @@ class RefreshWidgetAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
+        // Re-render first so the tap is acknowledged, then do the slow part.
+        WidgetPrefs.setRefreshing(context, true)
+        KetchWidget().update(context, glanceId)
         WidgetRefreshWorker.enqueue(context)
     }
 }

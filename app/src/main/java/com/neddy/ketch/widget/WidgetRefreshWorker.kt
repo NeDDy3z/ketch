@@ -34,6 +34,7 @@ class WidgetRefreshWorker(
             .flatMap { WidgetPrefs.selectedWatchers(context, manager.getAppWidgetId(it)) }
             .toSet()
         if (watcherIds.isEmpty()) {
+            WidgetPrefs.setRefreshing(context, false)
             KetchWidget().updateAll(context)
             return Result.success()
         }
@@ -76,6 +77,7 @@ class WidgetRefreshWorker(
             WidgetPrefs.setConnectionLine(context, watcherId, line)
         }
 
+        WidgetPrefs.setRefreshing(context, false)
         KetchWidget().updateAll(context)
         return Result.success()
     }

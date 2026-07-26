@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -78,7 +80,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,15 +91,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
@@ -127,6 +141,16 @@ private enum class HomeMode { NORMAL, REORDER, DELETE }
 
 private val REORDER_ROW_HEIGHT = 68.dp
 private val REORDER_ROW_RADIUS = 24.dp
+
+/** Shared height of the reorder and multi-select contextual bars. */
+private val CONTEXTUAL_BAR_HEIGHT = 52.dp
+private val CONTEXTUAL_BAR_ACTION_SIZE = 40.dp
+
+/** Where the header's blur and wash start giving way to the list beneath. */
+private const val HEADER_FADE_START = 0.58f
+private const val HEADER_BLUR_RADIUS = 26f
+private const val EXPANDED_TITLE_SP = 33f
+private const val COLLAPSED_TITLE_SP = 19f
 
 /** How long the delete snackbar keeps undo available. */
 private const val UNDO_WINDOW_MS = 5_000L
@@ -197,16 +221,9 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             when (mode) {
-                HomeMode.NORMAL -> HomeHeader(
-                    state = state,
-                    onRefresh = viewModel::refresh,
-                    onRefreshAll = viewModel::refreshAll,
-                    onOpenSettings = onOpenSettings,
-                    onOpenHelp = onOpenHelp,
-                    onReorder = { mode = HomeMode.REORDER },
-                    onDelete = { mode = HomeMode.DELETE },
-                    onToggleShowResting = { viewModel.setShowResting(!state.showResting) },
-                )
+                // Normal mode has no top bar: the header floats over the list so
+                // the cards stay continuous as they pass under it.
+                HomeMode.NORMAL -> Unit
                 HomeMode.REORDER -> ReorderTopBar(
                     onClose = { exitMode() },
                     onDone = { exitMode() },
@@ -270,26 +287,62 @@ fun HomeScreen(
                 modifier = contentModifier,
             )
 
-            HomeMode.NORMAL -> PullToRefreshBox(
-                isRefreshing = state.refreshing,
-                onRefresh = viewModel::refresh,
-                modifier = contentModifier,
-            ) {
-                NormalContent(
-                    state = state,
-                    onCreateWatcher = onCreateWatcher,
-                    onEditWatcher = onEditWatcher,
-                    onRefresh = viewModel::refresh,
-                    onEnableWatcher = { viewModel.setEnabled(it, true) },
-                )
+            HomeMode.NORMAL -> {
+                val listState = rememberLazyListState()
+                // The blurred strip behind the header is a recorded copy of the
+                // list, so the two have to share an origin: both fill this Box.
+                val backdrop = rememberGraphicsLayer()
+                var headerHeight by remember { mutableStateOf(0.dp) }
+                val density = LocalDensity.current
+                Box(modifier = contentModifier) {
+                    PullToRefreshBox(
+                        isRefreshing = state.refreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        NormalContent(
+                            state = state,
+                            listState = listState,
+                            topInset = headerHeight,
+                            backdrop = backdrop,
+                            onCreateWatcher = onCreateWatcher,
+                            onEditWatcher = onEditWatcher,
+                            onRefresh = viewModel::refresh,
+                            onEnableWatcher = { viewModel.setEnabled(it, true) },
+                        )
+                    }
+                    HomeHeader(
+                        state = state,
+                        listState = listState,
+                        backdrop = backdrop,
+                        onRefresh = viewModel::refresh,
+                        onRefreshAll = viewModel::refreshAll,
+                        onOpenSettings = onOpenSettings,
+                        onOpenHelp = onOpenHelp,
+                        onReorder = { mode = HomeMode.REORDER },
+                        onDelete = { mode = HomeMode.DELETE },
+                        onToggleShowResting = { viewModel.setShowResting(!state.showResting) },
+                        modifier = Modifier.onSizeChanged {
+                            headerHeight = with(density) { it.height.toDp() }
+                        },
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * The header floats over the list rather than sitting in a bar: a blurred copy
+ * of the cards passing underneath, faded out towards the bottom so there is no
+ * hard edge and the list reads as continuous. The large title shrinks once the
+ * list has moved.
+ */
 @Composable
 private fun HomeHeader(
     state: HomeUiState,
+    listState: LazyListState,
+    backdrop: GraphicsLayer,
     onRefresh: () -> Unit,
     onRefreshAll: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -299,71 +352,121 @@ private fun HomeHeader(
     onToggleShowResting: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .statusBarsPadding()
-            .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Ketch",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.size(44.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Sync,
-                    contentDescription = "Refresh",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(23.dp),
-                )
-            }
-            ToolsMenu(
-                hasWatchers = state.watcherConnections.isNotEmpty(),
-                showResting = state.showResting,
-                onRefreshAll = onRefreshAll,
-                onOpenSettings = onOpenSettings,
-                onOpenHelp = onOpenHelp,
-                onReorder = onReorder,
-                onDelete = onDelete,
-                onToggleShowResting = onToggleShowResting,
+    val scrolled by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 8
+        }
+    }
+    val titleSize by animateFloatAsState(
+        targetValue = if (scrolled) COLLAPSED_TITLE_SP else EXPANDED_TITLE_SP,
+        label = "homeTitle",
+    )
+    val surface = MaterialTheme.colorScheme.surface
+    Box(modifier = modifier.fillMaxWidth()) {
+        // Blur is a RenderEffect, so it only exists from API 31; below that the
+        // gradient alone carries the effect.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    // The blur applies to this Box's own output — a copy of the
+                    // recorded list — so the list underneath stays sharp.
+                    // Offscreen so the fade below can erase the blur itself,
+                    // rather than only drawing over it.
+                    .graphicsLayer {
+                        renderEffect = BlurEffect(
+                            HEADER_BLUR_RADIUS,
+                            HEADER_BLUR_RADIUS,
+                            TileMode.Decal,
+                        )
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawLayer(backdrop)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Black,
+                                HEADER_FADE_START to Color.Black,
+                                1f to Color.Transparent,
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
             )
         }
-        val busy = state.loading || state.watcherConnections.any { it.loading }
-        if (busy) {
+        // Tonal wash over the blur: solid at the status bar, gone by the bottom
+        // edge, so cards emerge rather than appearing from behind a band.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to surface,
+                        HEADER_FADE_START to surface.copy(alpha = 0.82f),
+                        1f to Color.Transparent,
+                    ),
+                ),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 26.dp),
+        ) {
             Row(
-                modifier = Modifier.padding(top = 1.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(15.dp),
-                )
                 Text(
-                    text = "Finding connections…",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = "Ketch",
+                    fontSize = titleSize.sp,
+                    lineHeight = (titleSize * 1.1f).sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Sync,
+                        contentDescription = "Refresh",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(23.dp),
+                    )
+                }
+                ToolsMenu(
+                    hasWatchers = state.watcherConnections.isNotEmpty(),
+                    showResting = state.showResting,
+                    onRefreshAll = onRefreshAll,
+                    onOpenSettings = onOpenSettings,
+                    onOpenHelp = onOpenHelp,
+                    onReorder = onReorder,
+                    onDelete = onDelete,
+                    onToggleShowResting = onToggleShowResting,
                 )
             }
-        } else {
-            val count = state.watcherConnections.size
-            Text(
-                text = if (count == 1) "1 watcher" else "$count watchers",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 1.dp),
-            )
+            // Only the busy line earns a second row; the watcher count did not.
+            if (state.loading || state.watcherConnections.any { it.loading }) {
+                Row(
+                    modifier = Modifier.padding(top = 1.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Text(
+                        text = "Finding connections\u2026",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -490,10 +593,15 @@ private fun ContextualBar(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.onSurface,
             shadowElevation = 4.dp,
-            modifier = Modifier.fillMaxWidth(),
+            // Fixed so reorder and multi-select are the same height whatever
+            // their actions are; a Button would otherwise claim a taller
+            // minimum touch target than an icon and grow the bar.
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(CONTEXTUAL_BAR_HEIGHT),
         ) {
             Row(
-                modifier = Modifier.padding(6.dp),
+                modifier = Modifier.padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = content,
@@ -509,7 +617,7 @@ private fun BarCloseButton(onClose: () -> Unit) {
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(CONTEXTUAL_BAR_ACTION_SIZE),
     ) {
         IconButton(onClick = onClose) {
             Icon(
@@ -536,7 +644,8 @@ private fun ReorderTopBar(onClose: () -> Unit, onDone: () -> Unit) {
         Button(
             onClick = onDone,
             shape = CircleShape,
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp),
+            modifier = Modifier.height(CONTEXTUAL_BAR_ACTION_SIZE),
         ) {
             Text(
                 text = "Done",
@@ -641,6 +750,9 @@ private fun DeleteBar(count: Int, onDelete: () -> Unit) {
 @Composable
 private fun NormalContent(
     state: HomeUiState,
+    listState: LazyListState,
+    topInset: Dp,
+    backdrop: GraphicsLayer,
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
     onRefresh: () -> Unit,
@@ -657,8 +769,21 @@ private fun NormalContent(
     val context = LocalContext.current
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 100.dp),
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            // Recorded so the header can draw a blurred copy of whatever is
+            // scrolling under it, then drawn normally.
+            .drawWithContent {
+                backdrop.record { this@drawWithContent.drawContent() }
+                drawLayer(backdrop)
+            },
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = topInset,
+            end = 16.dp,
+            bottom = 100.dp,
+        ),
         verticalArrangement = Arrangement.spacedBy(LIST_SPACING),
     ) {
         item { PermissionsSection(onGranted = onRefresh) }
@@ -898,6 +1023,46 @@ private fun ReorderList(
                             val scale = if (isDragging) 1.03f else 1f
                             scaleX = scale
                             scaleY = scale
+                        }
+                        // Long-press anywhere on the row to lift it; the handle
+                        // is an affordance, not the only target.
+                        .pointerInput(item.watcher.id, stepPx) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    draggingId = item.watcher.id
+                                    accumulated = 0f
+                                },
+                                onDragEnd = {
+                                    onCommit(list.map { it.watcher.id })
+                                    draggingId = null
+                                    accumulated = 0f
+                                },
+                                onDragCancel = {
+                                    draggingId = null
+                                    accumulated = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val id = draggingId
+                                    val cur = if (id != null) {
+                                        list.indexOfFirst { it.watcher.id == id }
+                                    } else {
+                                        -1
+                                    }
+                                    if (cur >= 0) {
+                                        accumulated += dragAmount.y
+                                        if (accumulated > stepPx / 2 && cur < list.lastIndex) {
+                                            list = list.toMutableList()
+                                                .also { it.add(cur + 1, it.removeAt(cur)) }
+                                            accumulated -= stepPx
+                                        } else if (accumulated < -stepPx / 2 && cur > 0) {
+                                            list = list.toMutableList()
+                                                .also { it.add(cur - 1, it.removeAt(cur)) }
+                                            accumulated += stepPx
+                                        }
+                                    }
+                                },
+                            )
                         },
                 ) {
                 Row(
@@ -909,52 +1074,13 @@ private fun ReorderList(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.DragHandle,
-                        contentDescription = "Drag to reorder",
+                        contentDescription = null,
                         tint = if (isDragging) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.outline
                         },
-                        modifier = Modifier
-                            .size(22.dp)
-                            .pointerInput(item.watcher.id, stepPx) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        draggingId = item.watcher.id
-                                        accumulated = 0f
-                                    },
-                                    onDragEnd = {
-                                        onCommit(list.map { it.watcher.id })
-                                        draggingId = null
-                                        accumulated = 0f
-                                    },
-                                    onDragCancel = {
-                                        draggingId = null
-                                        accumulated = 0f
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        val id = draggingId
-                                        val cur = if (id != null) {
-                                            list.indexOfFirst { it.watcher.id == id }
-                                        } else {
-                                            -1
-                                        }
-                                        if (cur >= 0) {
-                                            accumulated += dragAmount.y
-                                            if (accumulated > stepPx / 2 && cur < list.lastIndex) {
-                                                list = list.toMutableList()
-                                                    .also { it.add(cur + 1, it.removeAt(cur)) }
-                                                accumulated -= stepPx
-                                            } else if (accumulated < -stepPx / 2 && cur > 0) {
-                                                list = list.toMutableList()
-                                                    .also { it.add(cur - 1, it.removeAt(cur)) }
-                                                accumulated += stepPx
-                                            }
-                                        }
-                                    },
-                                )
-                            },
+                        modifier = Modifier.size(22.dp),
                     )
                     IconTile(
                         icon = watcherIcon(item.watcher.icon),

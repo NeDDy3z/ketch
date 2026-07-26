@@ -77,6 +77,18 @@ object WidgetPrefs {
         prefs(context).edit { putInt("page_$appWidgetId", page) }
     }
 
+    /**
+     * Whether a manual refresh is in flight. A widget cannot animate, so the
+     * header swaps in a "Refreshing…" label instead of leaving the tap looking
+     * like it did nothing while the lookup runs.
+     */
+    fun isRefreshing(context: Context): Boolean =
+        prefs(context).getBoolean("refreshing", false)
+
+    fun setRefreshing(context: Context, refreshing: Boolean) {
+        prefs(context).edit { putBoolean("refreshing", refreshing) }
+    }
+
     fun setConnectionLine(context: Context, watcherId: Long, line: String) {
         prefs(context).edit { putString("line_$watcherId", line) }
     }
