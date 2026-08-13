@@ -4,6 +4,7 @@ import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.data.settings.RefreshScope
+import com.neddy.ketch.data.settings.WatcherGestures
 import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
@@ -43,7 +44,7 @@ data class HomeUiState(
     val missingApiKey: Boolean = false,
     /** A newer release worth prompting about, null when there is nothing to say. */
     val availableUpdate: AppUpdate? = null,
-    val doubleTapOpensMaps: Boolean = true,
+    val gestures: WatcherGestures = WatcherGestures(),
     val showResting: Boolean = true,
 ) {
     /**
@@ -89,7 +90,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 .collectLatest { settings ->
                     _uiState.update {
                         it.copy(
-                            doubleTapOpensMaps = settings.doubleTapOpensMaps,
+                            gestures = settings.gestures,
                             showResting = settings.showResting,
                         )
                     }
@@ -201,6 +202,15 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     /** The prompt has handed off to the browser, so it has done its job. */
     fun updateOpened() {
         _uiState.update { it.copy(availableUpdate = null) }
+    }
+
+    /** One card's quick-action re-sync: a single lookup, nothing else touched. */
+    fun refreshWatcher(watcherId: Long) {
+        viewModelScope.launch {
+            val watchers = container.watcherRepository.getWatchers()
+            loadedWatchers = watchers
+            load(watchers) { it.id == watcherId }
+        }
     }
 
     fun setShowResting(show: Boolean) {

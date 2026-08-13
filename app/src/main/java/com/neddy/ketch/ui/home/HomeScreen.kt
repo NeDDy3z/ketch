@@ -133,6 +133,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.BuildConfig
 import com.neddy.ketch.appContainer
+import com.neddy.ketch.data.settings.WatcherAction
 import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.maps.TransitDirections
@@ -181,7 +182,6 @@ private fun windowText(watcher: Watcher): String =
 @Composable
 fun HomeScreen(
     onCreateWatcher: () -> Unit,
-    onEditWatcher: (Long) -> Unit,
     onOpenWatcher: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
@@ -192,6 +192,8 @@ fun HomeScreen(
 
     var mode by remember { mutableStateOf(HomeMode.NORMAL) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    /** The card whose quick actions menu is open, if any. */
+    var quickActionsFor by remember { mutableStateOf<Long?>(null) }
 
     // Leaving a special mode always clears its transient selection.
     fun exitMode() {
@@ -202,10 +204,7 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    fun deleteSelected() {
-        val toDelete = state.watcherConnections
-            .filter { it.watcher.id in selected }
-            .map { it.watcher }
+    fun deleteWatchers(toDelete: List<Watcher>) {
         if (toDelete.isEmpty()) return
         viewModel.delete(toDelete)
         exitMode()
@@ -229,6 +228,11 @@ fun HomeScreen(
             if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete()
         }
     }
+
+    /** Multi-select delete: whatever is ticked, through the same undo path. */
+    fun deleteSelected() = deleteWatchers(
+        state.watcherConnections.filter { it.watcher.id in selected }.map { it.watcher },
+    )
 
     state.availableUpdate?.let { update ->
         UpdateDialog(
@@ -341,8 +345,22 @@ fun HomeScreen(
                             topInset = headerHeight,
                             backdrop = backdrop,
                             onCreateWatcher = onCreateWatcher,
-                            onEditWatcher = onEditWatcher,
                             onOpenWatcher = onOpenWatcher,
+                            onQuickActions = { quickActionsFor = it },
+                            quickActionsFor = quickActionsFor,
+                            onQuickActionsDismiss = { quickActionsFor = null },
+                            onResyncWatcher = {
+                                quickActionsFor = null
+                                viewModel.refreshWatcher(it)
+                            },
+                            onReorder = {
+                                quickActionsFor = null
+                                mode = HomeMode.REORDER
+                            },
+                            onDeleteWatcher = {
+                                quickActionsFor = null
+                                deleteWatchers(listOf(it))
+                            },
                             onRefresh = viewModel::refresh,
                             onEnableWatcher = { viewModel.setEnabled(it, true) },
                         )
@@ -365,6 +383,52 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The row's own actions, floated over the card that raised them — the same
+ * shape as the header's tools menu, scoped to one watcher. Re-sync is the cheap
+ * single lookup; reorder switches the whole list into its mode, since dragging
+ * one row without the others makes no sense.
+ */
+@Composable
+private fun QuickActionsMenu(
+    expanded: Boolean,
+    watcher: Watcher,
+    onDismiss: () -> Unit,
+    onResync: (Long) -> Unit,
+    onReorder: () -> Unit,
+    onDelete: (Watcher) -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("Re-sync") },
+            leadingIcon = { Icon(Icons.Filled.Sync, contentDescription = null) },
+            onClick = { onResync(watcher.id) },
+        )
+        DropdownMenuItem(
+            text = { Text("Reorder") },
+            leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null) },
+            onClick = onReorder,
+        )
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        DropdownMenuItem(
+            text = {
+                Text(text = "Delete", color = MaterialTheme.colorScheme.error)
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            onClick = { onDelete(watcher) },
+        )
     }
 }
 
@@ -869,8 +933,13 @@ private fun NormalContent(
     topInset: Dp,
     backdrop: GraphicsLayer,
     onCreateWatcher: () -> Unit,
-    onEditWatcher: (Long) -> Unit,
     onOpenWatcher: (Long) -> Unit,
+    onQuickActions: (Long) -> Unit,
+    quickActionsFor: Long?,
+    onQuickActionsDismiss: () -> Unit,
+    onResyncWatcher: (Long) -> Unit,
+    onReorder: () -> Unit,
+    onDeleteWatcher: (Watcher) -> Unit,
     onRefresh: () -> Unit,
     onEnableWatcher: (Watcher) -> Unit,
 ) {
@@ -924,22 +993,38 @@ private fun NormalContent(
                 state.visibleWatcherConnections,
                 key = { _, item -> item.watcher.id },
             ) { _, item ->
+                // Every gesture is whatever Settings says it is, so the card
+                // only knows how to run an action, not which one belongs where.
+                fun run(action: WatcherAction) {
+                    when (action) {
+                        WatcherAction.NONE -> Unit
+                        WatcherAction.DETAILS -> onOpenWatcher(item.watcher.id)
+                        WatcherAction.MAPS ->
+                            TransitDirections.open(context, item.watcher.destination)
+                        WatcherAction.QUICK_ACTIONS -> onQuickActions(item.watcher.id)
+                    }
+                }
                 Box(
                     modifier = Modifier.combinedClickable(
-                        onClick = { onEditWatcher(item.watcher.id) },
-                        // Hold is the way into the details page: the connection
-                        // in full, with an alternative and the row's actions.
-                        onLongClick = { onOpenWatcher(item.watcher.id) },
-                        // Double tap hands the route to Google Maps as public
-                        // transport directions to the watcher destination, when
-                        // the gesture is enabled in Settings.
-                        onDoubleClick = if (state.doubleTapOpensMaps) {
-                            { TransitDirections.open(context, item.watcher.destination) }
-                        } else {
+                        onClick = { run(state.gestures.tap) },
+                        onLongClick = { run(state.gestures.hold) },
+                        // A null handler leaves the double tap unclaimed, which
+                        // also keeps the single tap from waiting on it.
+                        onDoubleClick = if (state.gestures.doubleTap == WatcherAction.NONE) {
                             null
+                        } else {
+                            { run(state.gestures.doubleTap) }
                         },
                     ),
                 ) {
+                    QuickActionsMenu(
+                        expanded = quickActionsFor == item.watcher.id,
+                        watcher = item.watcher,
+                        onDismiss = onQuickActionsDismiss,
+                        onResync = onResyncWatcher,
+                        onReorder = onReorder,
+                        onDelete = onDeleteWatcher,
+                    )
                     val connection = item.connection
                     // Off, not broken: a resting watcher stays scannable but goes
                     // visually quiet rather than looking like it crashed.

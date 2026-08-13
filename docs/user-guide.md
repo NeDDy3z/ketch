@@ -75,16 +75,18 @@ current fastest connection. While lookups run you see loading placeholders.
 Disabled watchers appear as a muted resting card.
 
 - Pull down to refresh all connections.
-- Tap a watcher to edit it.
-- Long press a watcher to open its details.
-- Double tap a watcher to open the route in Google Maps as public transport
-  directions to its destination.
+- One tap, double tap and hold each run whatever action you assign them in
+  Settings → Gestures. Out of the box: tap opens the details page, double tap
+  opens the route in Google Maps, and holding brings up the quick actions.
+- Quick actions is a small menu floating over the card with re-sync (looks
+  that one watcher up again), reorder (switches the list into reorder mode)
+  and delete (with the same five second undo).
 - Flip a watcher's switch to enable or disable it without opening the editor.
 - Add a watcher with the button in the bottom right corner.
 
 ### Watcher details
 
-Long pressing a watcher opens its details page:
+The details page, opened by whichever gesture you assigned to it:
 
 - The connection it would notify you about if you left now.
 - Under it, a quicker connection when one exists: a departure later than the
@@ -136,11 +138,12 @@ Each group of settings sits in its own category card:
   - "Driving above" is the speed from which a leave counts as a car journey
     rather than a walk. Above it, a watcher with a car start point routes
     from there.
-- Gestures: whether a double tap opens the route in Google Maps.
+- Gestures: what one tap, a double tap and a hold on a home card do. Each can
+  be set to open the details page, open Google Maps, show the quick actions
+  menu, or do nothing.
 - Refresh: whether pull to refresh looks up every watcher or only the ones
   inside their active day and window.
-- Updates: whether Ketch watches its own GitHub release page, a "Check now"
-  button, and a link to the latest release.
+- Updates: whether Ketch checks for updates, and a "Check now" button.
 - API key: the Google Maps Platform key used for lookups.
 - New watcher defaults: active days, time window, and leave radius that
   prefill the editor when you create a new watcher.
@@ -159,8 +162,8 @@ Home screen:
 - **Don't remind me** stops the checks entirely. Settings → Updates turns
   them back on, and it asks again straight away.
 
-Settings → Updates also has a "Check now" button and links to the latest
-release. Help → Updates links to the latest release and the full history.
+Settings → Updates also has a "Check now" button. Help → Updates links to the
+latest release and the full history.
 
 ## Tips
 

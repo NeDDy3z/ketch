@@ -62,7 +62,6 @@ fun KetchRoot() {
             composable(Routes.HOME) {
                 HomeScreen(
                     onCreateWatcher = { navController.navigate(Routes.watcherEdit()) },
-                    onEditWatcher = { id -> navController.navigate(Routes.watcherEdit(id)) },
                     onOpenWatcher = { id -> navController.navigate(Routes.watcherDetail(id)) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onOpenHelp = { navController.navigate(Routes.HELP) },

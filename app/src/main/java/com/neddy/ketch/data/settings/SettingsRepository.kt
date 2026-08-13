@@ -47,6 +47,39 @@ enum class ColorPalette {
 enum class RefreshScope { ALL, ACTIVE }
 
 /**
+ * What a gesture on a home card does. Every gesture can be given any of these,
+ * so the three of them are the user's to assign rather than fixed behaviour.
+ */
+enum class WatcherAction {
+    /** Nothing at all — the way to switch a gesture off. */
+    NONE,
+    DETAILS,
+    MAPS,
+
+    /** The floating menu of row actions: re-sync, reorder, delete. */
+    QUICK_ACTIONS,
+}
+
+/** Which gesture a [WatcherAction] is bound to. */
+enum class WatcherGesture { TAP, DOUBLE_TAP, HOLD }
+
+/**
+ * The full gesture map of a home card. The defaults keep the shortest gesture
+ * on the most used destination and put the destructive menu behind the longest.
+ */
+data class WatcherGestures(
+    val tap: WatcherAction = WatcherAction.DETAILS,
+    val doubleTap: WatcherAction = WatcherAction.MAPS,
+    val hold: WatcherAction = WatcherAction.QUICK_ACTIONS,
+) {
+    operator fun get(gesture: WatcherGesture): WatcherAction = when (gesture) {
+        WatcherGesture.TAP -> tap
+        WatcherGesture.DOUBLE_TAP -> doubleTap
+        WatcherGesture.HOLD -> hold
+    }
+}
+
+/**
  * Defaults applied when creating a new watcher.
  */
 data class WatcherDefaults(
@@ -61,7 +94,7 @@ data class WatcherDefaults(
 data class AppSettings(
     val palette: ColorPalette,
     val apiKey: String,
-    val doubleTapOpensMaps: Boolean,
+    val gestures: WatcherGestures,
     val refreshScope: RefreshScope,
     val showResting: Boolean,
     /**
@@ -87,7 +120,9 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val PALETTE = stringPreferencesKey("color_palette")
         val API_KEY = stringPreferencesKey("api_key")
-        val DOUBLE_TAP_MAPS = booleanPreferencesKey("double_tap_opens_maps")
+        val GESTURE_TAP = stringPreferencesKey("gesture_tap")
+        val GESTURE_DOUBLE_TAP = stringPreferencesKey("gesture_double_tap")
+        val GESTURE_HOLD = stringPreferencesKey("gesture_hold")
         val WALK_REDUCTION = intPreferencesKey("walk_reduction_percent")
         val CAR_SPEED_THRESHOLD = intPreferencesKey("car_speed_threshold_kmh")
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks_enabled")
@@ -109,7 +144,11 @@ class SettingsRepository(private val context: Context) {
                 ?.let { runCatching { ColorPalette.valueOf(it) }.getOrNull() }
                 ?: ColorPalette.DEFAULT,
             apiKey = effectiveApiKey(prefs[Keys.API_KEY]),
-            doubleTapOpensMaps = prefs[Keys.DOUBLE_TAP_MAPS] ?: true,
+            gestures = WatcherGestures(
+                tap = prefs.action(Keys.GESTURE_TAP, WatcherAction.DETAILS),
+                doubleTap = prefs.action(Keys.GESTURE_DOUBLE_TAP, WatcherAction.MAPS),
+                hold = prefs.action(Keys.GESTURE_HOLD, WatcherAction.QUICK_ACTIONS),
+            ),
             walkReductionPercent = (prefs[Keys.WALK_REDUCTION] ?: WalkAdjustment.DEFAULT_PERCENT)
                 .coerceIn(0, WalkAdjustment.MAX_PERCENT),
             carSpeedThresholdKmh = (prefs[Keys.CAR_SPEED_THRESHOLD] ?: DEFAULT_CAR_SPEED_KMH)
@@ -159,8 +198,13 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setDoubleTapOpensMaps(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DOUBLE_TAP_MAPS] = enabled }
+    suspend fun setGestureAction(gesture: WatcherGesture, action: WatcherAction) {
+        val key = when (gesture) {
+            WatcherGesture.TAP -> Keys.GESTURE_TAP
+            WatcherGesture.DOUBLE_TAP -> Keys.GESTURE_DOUBLE_TAP
+            WatcherGesture.HOLD -> Keys.GESTURE_HOLD
+        }
+        context.dataStore.edit { it[key] = action.name }
     }
 
     suspend fun setRefreshScope(scope: RefreshScope) {
@@ -201,6 +245,13 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.DEFAULT_MAX_TRAVEL_MINUTES] = defaults.maxTravelMinutes ?: -1
         }
     }
+
+    private fun Preferences.action(
+        key: Preferences.Key<String>,
+        fallback: WatcherAction,
+    ): WatcherAction = this[key]
+        ?.let { runCatching { WatcherAction.valueOf(it) }.getOrNull() }
+        ?: fallback
 
     private fun effectiveApiKey(stored: String?): String =
         stored?.takeIf { it.isNotBlank() } ?: BuildConfig.MAPS_API_KEY

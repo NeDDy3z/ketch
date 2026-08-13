@@ -23,16 +23,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
@@ -64,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,7 +80,8 @@ import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.data.settings.RefreshScope
 import com.neddy.ketch.data.settings.SettingsRepository
-import com.neddy.ketch.data.update.UpdateRepository
+import com.neddy.ketch.data.settings.WatcherAction
+import com.neddy.ketch.data.settings.WatcherGesture
 import com.neddy.ketch.domain.WalkAdjustment
 import com.neddy.ketch.ui.components.SkeletonBox
 import com.neddy.ketch.ui.theme.description
@@ -200,46 +207,31 @@ fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
             }
 
             SettingsGroup(title = "Gestures") {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .background(MaterialTheme.colorScheme.surfaceContainer),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Map,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Text(
-                            text = "Double-tap opens in Google Maps",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "Double-tap a connection on Home to launch it as a " +
-                                "route in Google Maps.",
-                            fontSize = 12.sp,
-                            lineHeight = 17.4.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    WatcherGesture.entries.forEachIndexed { index, gesture ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                        }
+                        GestureRow(
+                            gesture = gesture,
+                            action = current.gestures[gesture],
+                            onActionChange = { viewModel.setGestureAction(gesture, it) },
                         )
                     }
-                    Switch(
-                        checked = current.doubleTapOpensMaps,
-                        onCheckedChange = viewModel::setDoubleTapOpensMaps,
-                    )
                 }
                 Text(
-                    text = "Tap a watcher to edit it, long-press to open its details.",
+                    text = "What each gesture on a home card does. Any gesture can take " +
+                        "any action, and editing lives on the details page.",
                     fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
@@ -808,8 +800,8 @@ private fun RadioRow(
 
 /**
  * Ketch is sideloaded, so this card is the whole update story: the automatic
- * watch on the release page, a manual check, and the way out to the download
- * when there is something newer.
+ * watch on the release page and a manual check. The link out to the release
+ * itself lives in Help, where the rest of the GitHub rows are.
  */
 @Composable
 private fun UpdatesCard(
@@ -838,24 +830,12 @@ private fun UpdatesCard(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp),
             )
-            Column(
+            Text(
+                text = "Check for updates",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = "Watch for new releases",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "Checks the GitHub release page a few times a day and " +
-                        "offers the new APK. Turn back on here after " +
-                        "“Don't remind me”.",
-                    fontSize = 12.sp,
-                    lineHeight = 17.4.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            )
             Switch(checked = enabled, onCheckedChange = onEnabledChange)
         }
         HorizontalDivider(
@@ -911,37 +891,101 @@ private fun UpdatesCard(
                 Text(text = "Check now")
             }
         }
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        )
+    }
+}
+
+/** One gesture and the action bound to it, chosen from a menu on the row. */
+@Composable
+private fun GestureRow(
+    gesture: WatcherGesture,
+    action: WatcherAction,
+    onActionChange: (WatcherAction) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { uriHandler.openUri(UpdateRepository.LATEST_RELEASE_URL) }
+                .clickable { expanded = true }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Filled.NewReleases,
+                imageVector = gestureIcon(gesture),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp),
             )
             Text(
-                text = "Latest release on GitHub",
+                text = gestureLabel(gesture),
                 fontSize = 15.sp,
                 modifier = Modifier.weight(1f),
             )
+            Text(
+                text = actionLabel(action),
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (action == WatcherAction.NONE) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                textAlign = TextAlign.End,
+            )
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.Filled.ArrowDropDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
         }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            WatcherAction.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(actionLabel(option)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (option == action) {
+                                Icons.Filled.RadioButtonChecked
+                            } else {
+                                Icons.Filled.RadioButtonUnchecked
+                            },
+                            contentDescription = null,
+                            tint = if (option == action) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onActionChange(option)
+                    },
+                )
+            }
+        }
     }
+}
+
+private fun gestureLabel(gesture: WatcherGesture): String = when (gesture) {
+    WatcherGesture.TAP -> "One tap"
+    WatcherGesture.DOUBLE_TAP -> "Double tap"
+    WatcherGesture.HOLD -> "Hold"
+}
+
+private fun gestureIcon(gesture: WatcherGesture): ImageVector = when (gesture) {
+    WatcherGesture.TAP -> Icons.Filled.TouchApp
+    WatcherGesture.DOUBLE_TAP -> Icons.Filled.Bolt
+    WatcherGesture.HOLD -> Icons.Filled.PanTool
+}
+
+private fun actionLabel(action: WatcherAction): String = when (action) {
+    WatcherAction.NONE -> "Nothing"
+    WatcherAction.DETAILS -> "Details page"
+    WatcherAction.MAPS -> "Google Maps"
+    WatcherAction.QUICK_ACTIONS -> "Quick actions"
 }
 
 /**

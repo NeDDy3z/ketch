@@ -44,8 +44,11 @@ stop and arrival time. Walking segments are always excluded.
 - Home screen listing every watcher with its current fastest connection, in
   your own order: pull to refresh, drag or arrow to reorder, and multi select
   to delete from the top right menu (which also opens Settings)
-- Watcher details on long press: the connection you would be told to catch
-  now, a quicker one worth waiting for when it exists, and edit and delete
+- Watcher details: the connection you would be told to catch now, a quicker
+  one worth waiting for when it exists, and edit and delete
+- Assignable card gestures: one tap, double tap and hold each open the details
+  page, Google Maps, the quick actions menu (re-sync, reorder, delete), or
+  nothing
 - Walk time reduction: shave a percentage off the routing provider's walking
   estimate so connections you can still catch are not written off
 - Refresh scope setting: pull to refresh can look up every watcher or only the

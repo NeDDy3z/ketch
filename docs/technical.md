@@ -183,8 +183,12 @@ All watchers are location triggered. The trigger location is picked on a map
   every watcher in the user defined `sortOrder`, each with its current
   fastest connection (disabled watchers show a muted resting card). Each card
   carries an enable/disable switch that saves and re-syncs geofences in place.
-  Pull to refresh re-runs the lookups. A FAB adds a watcher, a tap opens one
-  for editing and a long press opens its details. On first composition it also
+  Pull to refresh re-runs the lookups. A FAB adds a watcher. Tap, double tap
+  and hold each dispatch a `WatcherAction` read from `WatcherGestures`, so the
+  card knows how to run an action rather than which gesture owns it; the
+  actions are the details page, Google Maps, the quick actions menu (re-sync,
+  reorder, delete, floated over the card as a `DropdownMenu`) and nothing.
+  Editing is reached from the details page. On first composition it also
   asks `UpdateRepository.updateToPrompt`, and a newer release raises a dialog
   offering update, later, or don't remind me. Reordering only
   reshuffles cards without re-running lookups. The top right tools

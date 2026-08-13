@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.data.settings.AppSettings
 import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.data.settings.RefreshScope
+import com.neddy.ketch.data.settings.WatcherAction
 import com.neddy.ketch.data.settings.WatcherDefaults
+import com.neddy.ketch.data.settings.WatcherGesture
 import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.di.AppContainer
 import java.time.DayOfWeek
@@ -69,8 +71,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setCarSpeedThresholdKmh(kmh) }
     }
 
-    fun setDoubleTapOpensMaps(enabled: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setDoubleTapOpensMaps(enabled) }
+    fun setGestureAction(gesture: WatcherGesture, action: WatcherAction) {
+        viewModelScope.launch {
+            container.settingsRepository.setGestureAction(gesture, action)
+        }
     }
 
     fun setRefreshScope(scope: RefreshScope) {
