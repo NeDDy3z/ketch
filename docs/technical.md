@@ -30,14 +30,18 @@ ui  ->  domain  <-  data
 - `KetchDatabase` (Room) stores watchers in the `watchers` table via
   `WatcherEntity` and `WatcherDao`. Mapping to the domain `Watcher` model is
   done by extension functions in `WatcherEntity.kt`. Active days are stored
-  as comma separated ISO day numbers. Schema version 4 adds the optional car
-  start columns (`MIGRATION_3_4`) on top of version 3's preference and
-  ordering columns (`MIGRATION_2_3`); both preserve existing rows, and the
-  destructive fallback remains only as a safety net for other version gaps.
+  as comma separated ISO day numbers. Schema version 5 adds the car leg mode
+  (`MIGRATION_4_5`) on top of version 4's car stop columns (`MIGRATION_3_4`)
+  and version 3's preference and ordering columns (`MIGRATION_2_3`); all
+  preserve existing rows, and the destructive fallback remains only as a
+  safety net for other version gaps. The car stop columns are still named
+  `carStart*`, from when they were a plain start point.
   `WatcherDao.applyOrder` writes a full reordering in one transaction.
 - `SettingsRepository` (Preferences DataStore) stores the palette, the
-  runtime API key override, the walk time reduction, the car speed
-  threshold, and the defaults applied to new watchers.
+  runtime API key override, the gesture actions, the walk time reduction, the
+  car speed threshold, the defaults applied to new watchers, and two pieces of
+  state that are caches rather than settings: the newest known release and
+  where the car is parked.
 
 ### Transit provider
 
@@ -79,10 +83,13 @@ compares dotted components numerically so 2.10 beats 2.9. Drafts and
 prereleases are ignored. Failures return null: an update check is never the
 reason the user sees an error.
 
-`updateToPrompt` adds the policy on top of `check`: nothing while the user has
-switched checks off, nothing before the "Later" snooze expires (24 h), and
-nothing within 6 h of the last check, so relaunching does not re-query a rate
-limited endpoint. Those three timestamps and the toggle live in DataStore.
+`updateToPrompt` adds `UpdatePolicy` on top of `check`: nothing while the user
+has switched checks off, nothing before the "Later" snooze expires (24 h), a
+prompt straight from the cached release when one is already known, and
+otherwise a check — every launch, but at most once per launch until a long
+wait has passed. Pacing per launch rather than per clock is deliberate: a
+check that found nothing must not silence the next launch, which is exactly
+how a published release went unnoticed before.
 
 The abstraction exists so a regional provider (for example Golemio for
 Prague/PID data, which offers realtime vehicle positions and closures) can be
@@ -92,9 +99,9 @@ the same interface.
 ## Domain layer
 
 - `Watcher` models one configured commute, including the icon key, trigger
-  location, an optional car start point, active days, time window, optional
-  limits, an optional preferred vehicle with a travel delta, and a
-  `sortOrder` for the home ordering.
+  location, an optional car leg (a swap stop plus which stretch the car
+  covers), active days, time window, optional limits, an optional preferred
+  vehicle with a travel delta, and a `sortOrder` for the home ordering.
   `Watcher.isActiveAt` implements the day and window check applied when a
   trigger fires. Routes have no configured start; they begin at the current
   device position.
@@ -111,13 +118,20 @@ the same interface.
   `ConnectionSelector.selectQuickerAlternative` finds the connection worth
   waiting for on the details page: the soonest departure after the selected
   one whose travel duration is strictly shorter.
-- `OriginSelector.select` decides where a lookup starts. Below the car speed
-  threshold, or with the speed unknown, it is the device position (falling
-  back to the trigger location). At or above it, a watcher with a car start
-  point routes from there instead, because the walk to a local stop is not
-  what happens next. Only `ConnectionLookupWorker` passes a real speed; the
-  home screen and the widget always walk, since a cached fix says nothing
-  about how the user left.
+- `JourneyPlanner.plan` decides which two points a lookup runs between once
+  the drivable leg is taken into account, returning the origin, the
+  destination, and what is driven either side. `CarLeg.TO_STOP` starts the
+  transit journey at the swap stop when the leave was fast enough to be a
+  drive (or when a car is already recorded there) and reports the stop as
+  `parksCarAt`; `CarLeg.FROM_STOP` ends it wherever the car is actually
+  waiting, so the last stretch is driven. Without a car in play both ends are
+  the real ones. Only `ConnectionLookupWorker` passes a real speed; the home
+  screen, details page and widget pass none, since a cached fix says nothing
+  about how the user left — there, only a car known to be out counts.
+- `ParkedCar` is that shared state: one car, one place, with a 14 hour life so
+  it covers a working day and never survives into a morning the car might stay
+  at home. `ConnectionLookupWorker` writes it on a detected drive, the details
+  page's switch writes it by hand, and every planner call reads it.
 - `WalkAdjustment` holds the walk reduction arithmetic: the reduced walk, the
   capped saving used to shift a lookup earlier, and whether a connection is
   still reachable at the reduced pace.
@@ -129,7 +143,9 @@ the same interface.
 - `ConnectionFormatter` renders the notification: the title is the first
   boarding as `"emoji stop (line) time"`, the body continues with the
   remaining boardings and the arrival, one per line in the expanded view.
-  The emoji is derived from the transit vehicle type.
+  The emoji is derived from the transit vehicle type. A driven leg is a line
+  of its own either side of the transit ones, and the collapsed body ends in
+  "then drive" when the arrival is the car rather than the door.
 
 ## Trigger layer
 
@@ -160,9 +176,10 @@ All watchers are location triggered. The trigger location is picked on a map
    window start rather than after a full day.
 3. Confirms the exit with `TriggerConfirmation.exitConfirmed` using a fresh
    fix, so a spurious exit while still sitting inside the radius is dropped.
-4. Resolves the route origin through `OriginSelector`, using the speed of
-   the confirming fix so a fast leave routes from the watcher's car start
-   point instead of the door.
+4. Plans the journey through `JourneyPlanner`, using the speed of the
+   confirming fix so a fast leave is treated as a drive, and records the
+   parked car before the lookup — the car is at the stop whether or not a
+   connection is found from there.
 4. Fetches connections, selects the best one, formats it, and posts a high
    priority notification via `NotificationHelper`.
 5. Marks the watcher as triggered. Network failures retry up to 3 times.
@@ -251,6 +268,10 @@ Unit tests cover the pure logic:
 - `TriggerConfirmationTest` verifies the geofence exit confirmation.
 - `WatcherTest` verifies the fire once per window gate.
 - `AppVersionTest` verifies the release version comparison.
+- `UpdatePolicyTest` verifies when the update prompt is allowed to appear,
+  including that a fresh launch always gets a check.
+- `JourneyPlannerTest` verifies the part-car commute in both directions, on
+  car days and on days the car stays at home.
 
 Run with `./gradlew test`.
 

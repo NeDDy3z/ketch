@@ -94,6 +94,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.model.LatLng
 import com.neddy.ketch.appContainer
+import com.neddy.ketch.domain.model.CarLeg
 import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.VehicleCategory
@@ -121,9 +122,11 @@ fun WatcherEditScreen(
     // left to type into and would only cover the rest of the form.
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    // Forced, and focus first: a field that keeps focus gets the IME straight
+    // back, and tapping a suggestion row does not take focus off it by itself.
     val dismissKeyboard = {
+        focusManager.clearFocus(force = true)
         keyboardController?.hide()
-        focusManager.clearFocus()
     }
 
     LaunchedEffect(state.saved) {
@@ -282,51 +285,114 @@ fun WatcherEditScreen(
                 }
             }
 
-            // Car start
+            // Car leg
             EditorSection(
                 icon = Icons.Filled.DirectionsCar,
                 iconTint = MaterialTheme.colorScheme.primary,
-                title = "Car start",
+                title = "Car leg",
                 titleSuffix = " · optional",
             ) {
-                SearchField(
-                    query = state.carStartQuery,
-                    placeholder = "Where you park, e.g. a park and ride",
-                    searching = state.carStartSearching,
-                    isError = false,
-                    showCheck = state.carStart != null,
-                    onQueryChange = viewModel::setCarStartQuery,
-                    onOpenMap = { mapPickerTarget = MapPickerTarget.CAR_START },
-                )
-                state.carStartSearchError?.let { InlineErrorHelper(it) }
-                if (state.carStartResults.isNotEmpty()) {
-                    SuggestionList(
-                        items = state.carStartResults.take(6),
-                        title = { it.name },
-                        subtitle = { it.address },
-                        onSelect = {
-                            dismissKeyboard()
-                            viewModel.selectCarStartSuggestion(it)
-                        },
-                    )
-                }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        text = "Used when you leave fast enough to be driving.",
-                        fontSize = 12.sp,
-                        lineHeight = 17.4.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 4.dp),
+                    CarLeg.entries.forEach { leg ->
+                        val selected = state.carLeg == leg
+                        FilterChip(
+                            selected = selected,
+                            onClick = { viewModel.setCarLeg(leg) },
+                            shape = CircleShape,
+                            label = {
+                                Text(
+                                    text = leg.label,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Medium
+                                    },
+                                )
+                            },
+                            leadingIcon = if (selected) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.Transparent,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                selectedContainerColor =
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                selectedLabelColor =
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedLeadingIconColor =
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selected,
+                                borderColor = MaterialTheme.colorScheme.outline,
+                                borderWidth = 1.dp,
+                            ),
+                        )
+                    }
+                }
+                if (state.carLeg.usesCar) {
+                    SearchField(
+                        query = state.carStopQuery,
+                        placeholder = "The stop you swap car and transit at",
+                        searching = state.carStopSearching,
+                        isError = state.carStop == null,
+                        showCheck = state.carStop != null,
+                        onQueryChange = viewModel::setCarStopQuery,
+                        onOpenMap = { mapPickerTarget = MapPickerTarget.CAR_STOP },
                     )
-                    if (state.carStart != null) {
-                        TextButton(onClick = viewModel::clearCarStart) {
-                            Text(text = "Clear", fontSize = 13.sp)
+                    state.carStopSearchError?.let { InlineErrorHelper(it) }
+                    if (state.carStopResults.isNotEmpty()) {
+                        SuggestionList(
+                            items = state.carStopResults.take(6),
+                            title = { it.name },
+                            subtitle = { it.address },
+                            onSelect = {
+                                dismissKeyboard()
+                                viewModel.selectCarStopSuggestion(it)
+                            },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (state.carLeg == CarLeg.TO_STOP) {
+                                "Leave fast enough to be driving and the connection is " +
+                                    "looked up from this stop, with the car left there."
+                            } else {
+                                "Used only while the car is actually waiting at this " +
+                                    "stop; otherwise the whole journey stays on public " +
+                                    "transport."
+                            },
+                            fontSize = 12.sp,
+                            lineHeight = 17.4.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 4.dp),
+                        )
+                        if (state.carStop != null) {
+                            TextButton(onClick = viewModel::clearCarStop) {
+                                Text(text = "Clear", fontSize = 13.sp)
+                            }
                         }
                     }
                 }
@@ -525,7 +591,7 @@ fun WatcherEditScreen(
         MapPickerDialog(
             title = when (target) {
                 MapPickerTarget.TRIGGER -> "Trigger location"
-                MapPickerTarget.CAR_START -> "Car start"
+                MapPickerTarget.CAR_STOP -> "Car swap stop"
                 MapPickerTarget.DESTINATION -> "Destination"
             },
             initial = when (target) {
@@ -534,7 +600,7 @@ fun WatcherEditScreen(
                 } else {
                     null
                 }
-                MapPickerTarget.CAR_START -> state.carStart?.let {
+                MapPickerTarget.CAR_STOP -> state.carStop?.let {
                     LatLng(it.latitude, it.longitude)
                 }
                 MapPickerTarget.DESTINATION -> state.destination?.let {
@@ -553,8 +619,8 @@ fun WatcherEditScreen(
                 when (target) {
                     MapPickerTarget.TRIGGER ->
                         viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
-                    MapPickerTarget.CAR_START ->
-                        viewModel.pickCarStartOnMap(latLng.latitude, latLng.longitude)
+                    MapPickerTarget.CAR_STOP ->
+                        viewModel.pickCarStopOnMap(latLng.latitude, latLng.longitude)
                     MapPickerTarget.DESTINATION ->
                         viewModel.pickDestinationOnMap(latLng.latitude, latLng.longitude)
                 }
@@ -564,7 +630,7 @@ fun WatcherEditScreen(
     }
 }
 
-private enum class MapPickerTarget { TRIGGER, CAR_START, DESTINATION }
+private enum class MapPickerTarget { TRIGGER, CAR_STOP, DESTINATION }
 
 @Composable
 private fun EditorTopBar(

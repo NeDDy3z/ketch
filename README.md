@@ -34,9 +34,12 @@ stop and arrival time. Walking segments are always excluded.
   a fresh fix so GPS jitter does not fire a false departure
 - Per watcher icon picker, including combinations such as home by car or
   work on foot
-- Optional car start per watcher: leave fast enough to be driving and the
-  route starts where you park, for example a park and ride, instead of at
-  your door. Leave slowly and it stays a walk to the nearest stop
+- Optional car leg per watcher, for a commute that is part road and part
+  rails: pick the stop where you swap between the two and which stretch the
+  car covers. Drive out and the journey is looked up from that stop and the
+  car is remembered there; coming back, the train runs to the waiting car and
+  the last stretch is driven. On a day the car stays at home, both journeys
+  run end to end on public transport
 - Optional limits per watcher: maximum transfers and maximum travel time
 - Preferred connection per watcher: pick a vehicle type (train, bus, tram,
   metro, ferry) and Ketch chooses a connection using it, unless it is slower

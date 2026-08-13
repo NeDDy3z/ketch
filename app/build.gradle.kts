@@ -27,8 +27,8 @@ android {
         applicationId = "com.neddy.ketch"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10
-        versionName = "2.5.0"
+        versionCode = 11
+        versionName = "2.6.0"
 
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey

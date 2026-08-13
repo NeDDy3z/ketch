@@ -3,6 +3,7 @@ package com.neddy.ketch.ui.editor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neddy.ketch.di.AppContainer
+import com.neddy.ketch.domain.model.CarLeg
 import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.VehicleCategory
@@ -33,11 +34,12 @@ data class EditUiState(
     val triggerSearching: Boolean = false,
     val triggerSearchError: String? = null,
     val triggerRadiusMeters: Int = 150,
-    val carStart: StopPlace? = null,
-    val carStartQuery: String = "",
-    val carStartResults: List<PlaceSuggestion> = emptyList(),
-    val carStartSearching: Boolean = false,
-    val carStartSearchError: String? = null,
+    val carStop: StopPlace? = null,
+    val carLeg: CarLeg = CarLeg.NONE,
+    val carStopQuery: String = "",
+    val carStopResults: List<PlaceSuggestion> = emptyList(),
+    val carStopSearching: Boolean = false,
+    val carStopSearchError: String? = null,
     val activeDays: Set<DayOfWeek> = emptySet(),
     val windowStartMinutes: Int = 7 * 60,
     val windowEndMinutes: Int = 9 * 60,
@@ -54,9 +56,12 @@ data class EditUiState(
     val hasTriggerLocation: Boolean
         get() = triggerLatitude != null && triggerLongitude != null
 
+    /** A car leg without its swap stop is half a setting, so it blocks saving. */
+    val carLegIncomplete: Boolean get() = carLeg.usesCar && carStop == null
+
     val canSave: Boolean
         get() = !saving && name.isNotBlank() && destination != null &&
-            hasTriggerLocation && activeDays.isNotEmpty()
+            hasTriggerLocation && activeDays.isNotEmpty() && !carLegIncomplete
 }
 
 class WatcherEditViewModel(
@@ -69,7 +74,7 @@ class WatcherEditViewModel(
 
     private var searchJob: Job? = null
     private var triggerSearchJob: Job? = null
-    private var carStartSearchJob: Job? = null
+    private var carStopSearchJob: Job? = null
     private var editedWatcher: Watcher? = null
 
     init {
@@ -103,8 +108,9 @@ class WatcherEditViewModel(
                     watcher.triggerLongitude,
                 ),
                 triggerRadiusMeters = watcher.triggerRadiusMeters,
-                carStart = watcher.carStart,
-                carStartQuery = watcher.carStart?.name.orEmpty(),
+                carStop = watcher.carStop,
+                carLeg = watcher.carLeg,
+                carStopQuery = watcher.carStop?.name.orEmpty(),
                 activeDays = watcher.activeDays,
                 windowStartMinutes = watcher.windowStartMinutes,
                 windowEndMinutes = watcher.windowEndMinutes,
@@ -268,34 +274,34 @@ class WatcherEditViewModel(
      * search, except an empty query means "no car start" rather than an
      * unfinished edit, because the whole field is optional.
      */
-    fun setCarStartQuery(query: String) {
+    fun setCarStopQuery(query: String) {
         _uiState.update {
             it.copy(
-                carStartQuery = query,
-                carStart = if (query.isBlank()) null else it.carStart,
+                carStopQuery = query,
+                carStop = if (query.isBlank()) null else it.carStop,
             )
         }
-        carStartSearchJob?.cancel()
+        carStopSearchJob?.cancel()
         if (query.length < 3) {
             _uiState.update {
                 it.copy(
-                    carStartResults = emptyList(),
-                    carStartSearching = false,
-                    carStartSearchError = null,
+                    carStopResults = emptyList(),
+                    carStopSearching = false,
+                    carStopSearchError = null,
                 )
             }
             return
         }
-        carStartSearchJob = viewModelScope.launch {
+        carStopSearchJob = viewModelScope.launch {
             delay(400)
-            _uiState.update { it.copy(carStartSearching = true, carStartSearchError = null) }
+            _uiState.update { it.copy(carStopSearching = true, carStopSearchError = null) }
             try {
                 val results = container.transitRepository.searchAddresses(query)
                 _uiState.update {
                     it.copy(
-                        carStartResults = results,
-                        carStartSearching = false,
-                        carStartSearchError = if (results.isEmpty()) {
+                        carStopResults = results,
+                        carStopSearching = false,
+                        carStopSearchError = if (results.isEmpty()) {
                             "No places found for \"$query\""
                         } else {
                             null
@@ -305,17 +311,17 @@ class WatcherEditViewModel(
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
-                        carStartResults = emptyList(),
-                        carStartSearching = false,
-                        carStartSearchError = userMessageFor(e),
+                        carStopResults = emptyList(),
+                        carStopSearching = false,
+                        carStopSearchError = userMessageFor(e),
                     )
                 }
             }
         }
     }
 
-    fun selectCarStartSuggestion(suggestion: PlaceSuggestion) {
-        setCarStart(
+    fun selectCarStopSuggestion(suggestion: PlaceSuggestion) {
+        setCarStop(
             StopPlace(
                 name = suggestion.name,
                 latitude = suggestion.latitude,
@@ -325,14 +331,14 @@ class WatcherEditViewModel(
     }
 
     /** A map pick resolves to the nearest stop, since the car is parked at one. */
-    fun pickCarStartOnMap(latitude: Double, longitude: Double) {
+    fun pickCarStopOnMap(latitude: Double, longitude: Double) {
         viewModelScope.launch {
-            _uiState.update { it.copy(carStartSearching = true, carStartSearchError = null) }
+            _uiState.update { it.copy(carStopSearching = true, carStopSearchError = null) }
             val stop = try {
                 container.transitRepository.nearestStop(latitude, longitude)
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(carStartSearching = false, carStartSearchError = userMessageFor(e))
+                    it.copy(carStopSearching = false, carStopSearchError = userMessageFor(e))
                 }
                 return@launch
             } ?: StopPlace(
@@ -340,29 +346,32 @@ class WatcherEditViewModel(
                 latitude = latitude,
                 longitude = longitude,
             )
-            _uiState.update { it.copy(carStartSearching = false) }
-            setCarStart(stop)
+            _uiState.update { it.copy(carStopSearching = false) }
+            setCarStop(stop)
         }
     }
 
-    private fun setCarStart(stop: StopPlace) {
+    private fun setCarStop(stop: StopPlace) {
         _uiState.update {
             it.copy(
-                carStart = stop,
-                carStartQuery = stop.name,
-                carStartResults = emptyList(),
-                carStartSearchError = null,
+                carStop = stop,
+                carStopQuery = stop.name,
+                carStopResults = emptyList(),
+                carStopSearchError = null,
             )
         }
     }
 
-    fun clearCarStart() {
+    /** Picking a stretch with no stop yet leaves the field waiting for one. */
+    fun setCarLeg(leg: CarLeg) = _uiState.update { it.copy(carLeg = leg) }
+
+    fun clearCarStop() {
         _uiState.update {
             it.copy(
-                carStart = null,
-                carStartQuery = "",
-                carStartResults = emptyList(),
-                carStartSearchError = null,
+                carStop = null,
+                carStopQuery = "",
+                carStopResults = emptyList(),
+                carStopSearchError = null,
             )
         }
     }
@@ -449,6 +458,12 @@ class WatcherEditViewModel(
             }
             return
         }
+        if (state.carLegIncomplete) {
+            _uiState.update {
+                it.copy(validationError = "Pick the stop where the car leg ends")
+            }
+            return
+        }
         if (state.windowEndMinutes <= state.windowStartMinutes) {
             _uiState.update {
                 it.copy(validationError = "The time window end must be after its start")
@@ -463,7 +478,8 @@ class WatcherEditViewModel(
                 name = state.name.trim(),
                 icon = state.icon,
                 destination = destination,
-                carStart = state.carStart,
+                carStop = state.carStop?.takeIf { state.carLeg.usesCar },
+                carLeg = if (state.carStop == null) CarLeg.NONE else state.carLeg,
                 triggerLatitude = triggerLatitude,
                 triggerLongitude = triggerLongitude,
                 triggerRadiusMeters = state.triggerRadiusMeters,

@@ -17,11 +17,12 @@ data class Watcher(
     val icon: String = DEFAULT_ICON,
     val destination: StopPlace,
     /**
-     * Where the car gets parked, for example a park and ride. When set, a leave
-     * fast enough to be a car journey routes from here instead of the door.
-     * Null means every leave is treated as a walk to the nearest stop.
+     * The stop where this journey swaps between car and public transport, for
+     * example the station the car is left at. Null means no part of the journey
+     * is drivable. Which stretch the car covers is [carLeg].
      */
-    val carStart: StopPlace? = null,
+    val carStop: StopPlace? = null,
+    val carLeg: CarLeg = CarLeg.NONE,
     /** Center of the leave geofence. */
     val triggerLatitude: Double,
     val triggerLongitude: Double,

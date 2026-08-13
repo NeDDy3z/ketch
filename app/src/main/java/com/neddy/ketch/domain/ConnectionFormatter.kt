@@ -42,6 +42,7 @@ object ConnectionFormatter {
         connection: TransitConnection,
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant? = null,
+        driveAfter: Boolean = false,
     ): String {
         val first = connection.legs.first()
         val last = connection.legs.last()
@@ -50,18 +51,32 @@ object ConnectionFormatter {
             transfersText(connection.legs.size - 1),
         )
         leaveWithin(first.departureTime, now)?.let(parts::add)
+        // The arrival is the car, not the door, so say the journey goes on.
+        if (driveAfter) parts.add("then drive")
         return parts.joinToString(" · ")
     }
 
-    /** Expanded body: every boarding and the arrival, one stop per line. */
+    /**
+     * Expanded body: every boarding and the arrival, one stop per line. A
+     * drivable leg is a line of its own either side of the transit ones, so the
+     * whole door-to-door journey reads in order.
+     */
     fun notificationBigText(
         connection: TransitConnection,
         zoneId: ZoneId = ZoneId.systemDefault(),
+        driveBefore: String? = null,
+        driveAfter: String? = null,
     ): String {
         val boardings = connection.legs.map { boarding(it, zoneId) }
         val last = connection.legs.last()
         val arrival = "${time(last.arrivalTime, zoneId)} ${stopName(last.arrivalStop)}"
-        return (boardings + arrival).joinToString("\n")
+        val lines = buildList {
+            driveBefore?.let { add("🚗 Drive to ${stopName(it)}") }
+            addAll(boardings)
+            add(arrival)
+            driveAfter?.let { add("🚗 Drive on from ${stopName(it)}") }
+        }
+        return lines.joinToString("\n")
     }
 
     private fun transfersText(transfers: Int): String = when (transfers) {

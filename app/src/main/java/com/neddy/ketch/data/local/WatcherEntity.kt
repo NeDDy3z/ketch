@@ -2,6 +2,7 @@ package com.neddy.ketch.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.neddy.ketch.domain.model.CarLeg
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.domain.model.Watcher
@@ -15,10 +16,15 @@ data class WatcherEntity(
     val destinationName: String,
     val destinationLatitude: Double,
     val destinationLongitude: Double,
-    /** Optional car start point, all three columns set or all three null. */
+    /**
+     * The car swap stop, all three columns set or all three null. The column
+     * names are historical, from when this was a plain start point.
+     */
     val carStartName: String? = null,
     val carStartLatitude: Double? = null,
     val carStartLongitude: Double? = null,
+    /** [CarLeg] name: which stretch of the journey the car covers. */
+    val carLegMode: String? = null,
     val triggerLatitude: Double,
     val triggerLongitude: Double,
     val triggerRadiusMeters: Int,
@@ -42,11 +48,15 @@ fun WatcherEntity.toDomain(): Watcher = Watcher(
     name = name,
     icon = icon,
     destination = StopPlace(destinationName, destinationLatitude, destinationLongitude),
-    carStart = if (carStartLatitude != null && carStartLongitude != null) {
+    carStop = if (carStartLatitude != null && carStartLongitude != null) {
         StopPlace(carStartName.orEmpty(), carStartLatitude, carStartLongitude)
     } else {
         null
     },
+    carLeg = carLegMode
+        ?.let { runCatching { CarLeg.valueOf(it) }.getOrNull() }
+    // A stop saved before the leg existed was always a drive to it.
+        ?: if (carStartLatitude != null) CarLeg.TO_STOP else CarLeg.NONE,
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,
@@ -74,9 +84,10 @@ fun Watcher.toEntity(): WatcherEntity = WatcherEntity(
     destinationName = destination.name,
     destinationLatitude = destination.latitude,
     destinationLongitude = destination.longitude,
-    carStartName = carStart?.name,
-    carStartLatitude = carStart?.latitude,
-    carStartLongitude = carStart?.longitude,
+    carStartName = carStop?.name,
+    carStartLatitude = carStop?.latitude,
+    carStartLongitude = carStop?.longitude,
+    carLegMode = carLeg.name,
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,

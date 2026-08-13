@@ -11,7 +11,7 @@ import androidx.work.WorkerParameters
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
-import com.neddy.ketch.domain.OriginSelector
+import com.neddy.ketch.domain.JourneyPlanner
 import java.time.Instant
 
 /**
@@ -40,22 +40,25 @@ class WidgetRefreshWorker(
         }
 
         val location = container.locationProvider.quickLocation()
+        val parkedCar = container.settingsRepository.currentParkedCar()
         watcherIds.forEach { watcherId ->
             val watcher = container.watcherRepository.getWatcher(watcherId)
                 ?: return@forEach
             val line = try {
-                // A cached fix carries whatever speed it was recorded at, which
-                // says nothing about leaving, so the widget always walks.
-                val origin = OriginSelector.select(
+                // A cached fix says nothing about how the user left, so nothing
+                // here counts as driving: only a car known to be out is used.
+                val plan = JourneyPlanner.plan(
                     watcher = watcher,
                     latitude = location?.latitude,
                     longitude = location?.longitude,
                     speedKmh = null,
                     carSpeedThresholdKmh = 0,
+                    parkedCar = parkedCar,
+                    now = System.currentTimeMillis(),
                 )
                 val connections = container.transitRepository.findConnections(
-                    origin = origin,
-                    destination = watcher.destination,
+                    origin = plan.origin,
+                    destination = plan.destination,
                     departureTime = Instant.now(),
                 )
                 val best = ConnectionSelector.selectBest(
@@ -69,7 +72,11 @@ class WidgetRefreshWorker(
                     // The widget lays the journey out itself, so it gets the
                     // stops and legs flattened rather than a prose block.
                     WidgetPrefs.setJourney(context, watcherId, best.toWidgetJourney())
-                    ConnectionFormatter.notificationBigText(best)
+                    ConnectionFormatter.notificationBigText(
+                        best,
+                        driveBefore = plan.driveBefore?.name,
+                        driveAfter = plan.driveAfter?.name,
+                    )
                 } else {
                     WidgetPrefs.setJourney(context, watcherId, null)
                     "No connection found"

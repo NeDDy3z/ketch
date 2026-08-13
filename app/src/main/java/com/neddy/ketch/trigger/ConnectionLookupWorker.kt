@@ -7,8 +7,9 @@ import androidx.work.WorkerParameters
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
-import com.neddy.ketch.domain.OriginSelector
+import com.neddy.ketch.domain.JourneyPlanner
 import com.neddy.ketch.domain.TriggerConfirmation
+import com.neddy.ketch.domain.model.ParkedCar
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
@@ -66,20 +67,29 @@ class ConnectionLookupWorker(
         }
 
         // The fix behind the trigger is the one moment the app knows how the
-        // user actually left, so this is where the car start earns its keep.
+        // user actually left, so this is where a drivable leg is settled.
         val speedKmh = location?.takeIf { it.hasSpeed() }?.let { it.speed * 3.6 }
-        val origin = OriginSelector.select(
+        val plan = JourneyPlanner.plan(
             watcher = watcher,
             latitude = location?.latitude,
             longitude = location?.longitude,
             speedKmh = speedKmh,
             carSpeedThresholdKmh = container.settingsRepository.current().carSpeedThresholdKmh,
+            parkedCar = container.settingsRepository.currentParkedCar(),
+            now = now.toEpochMilli(),
         )
+        // Recorded before the lookup: the car is at the stop whether or not a
+        // connection is found from there, and the journey home needs to know.
+        plan.parksCarAt?.let {
+            container.settingsRepository.setParkedCar(
+                ParkedCar(place = it, parkedAt = now.toEpochMilli()),
+            )
+        }
 
         val connections = try {
             container.transitRepository.findConnections(
-                origin = origin,
-                destination = watcher.destination,
+                origin = plan.origin,
+                destination = plan.destination,
                 departureTime = now,
             )
         } catch (e: Exception) {
@@ -99,8 +109,16 @@ class ConnectionLookupWorker(
         container.notificationHelper.notifyConnection(
             watcher,
             watcher.name,
-            ConnectionFormatter.notificationText(best, now = now),
-            ConnectionFormatter.notificationBigText(best),
+            ConnectionFormatter.notificationText(
+                best,
+                now = now,
+                driveAfter = plan.driveAfter != null,
+            ),
+            ConnectionFormatter.notificationBigText(
+                best,
+                driveBefore = plan.driveBefore?.name,
+                driveAfter = plan.driveAfter?.name,
+            ),
         )
         container.watcherRepository.markTriggered(watcher.id, now.toEpochMilli())
         return Result.success()

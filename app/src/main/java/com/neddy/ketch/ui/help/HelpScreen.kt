@@ -95,10 +95,13 @@ private val FAQS = listOf(
             "the edit and delete actions. A plain tap still opens the editor.",
     ),
     Faq(
-        question = "When is the car start used?",
-        answer = "Only when you leave faster than the “Driving above” speed in Settings, " +
-            "which means you took the car. Ketch then routes from the place you park " +
-            "instead of your door. Walk out and nothing changes.",
+        question = "How does the car leg work?",
+        answer = "Set the stop where you swap car and transit, and which stretch the car " +
+            "covers. Driving out, Ketch looks the connection up from that stop and " +
+            "remembers the car is parked there; coming home, it plans the train to the " +
+            "waiting car and tells you to drive the rest. Take the bus instead and both " +
+            "journeys stay on public transport. Missed a drive? The Car card on the " +
+            "watcher's details page has a switch for it.",
     ),
     Faq(
         question = "Ketch says I have missed a connection I can still catch",

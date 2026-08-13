@@ -29,11 +29,18 @@ both ways, create two watchers, one for each direction.
      it there. The leave radius controls how far you must move before it
      fires. The route itself always starts from wherever you are when the
      watcher fires, so there is no start stop to configure.
-   - Car start: optional. Search or pick the place you park at, for example
-     a park and ride. When you leave the trigger fast enough to be driving
-     (see the "Driving above" setting), Ketch routes from there instead of
-     from your door. Leave it empty and every departure is treated as a
-     walk to the nearest stop. Use "Clear" to remove it again.
+   - Car leg: optional, for a commute that is part road and part rails.
+     Pick which stretch of this journey the car can cover and the stop
+     where you swap between the two:
+     - "Drive to the stop": you drive from where you leave to that stop and
+       take public transport onwards. Leave fast enough to be driving (see
+       the "Driving above" setting) and the connection is looked up from
+       that stop, with the car recorded as parked there.
+     - "Drive from the stop": you take public transport to that stop and
+       drive the rest. This is only used while the car is actually waiting
+       there; on a day it stayed at home the journey runs all the way to
+       your destination on public transport.
+     - "No car": no part of this journey is driven.
    - Active days: the days of the week the watcher is allowed to fire.
    - Time window: the watcher only fires between these times.
    - Limits: optionally cap the number of transfers and the total travel
@@ -92,8 +99,11 @@ The details page, opened by whichever gesture you assigned to it:
 - Under it, a quicker connection when one exists: a departure later than the
   first one that spends less time travelling. The subtitle says how much
   later it leaves and how much shorter it is, so waiting is a clear choice.
-- Everything the watcher is set to: destination, active days and window, car
-  start, preferred vehicle and limits.
+- For a watcher with a car leg, a Car card: which stretch the car covers, where
+  the car is waiting, and a "Car is out today" switch for the days Ketch did not
+  notice you driving off. The switch clears itself overnight.
+- Everything the watcher is set to: destination, active days and window,
+  preferred vehicle and limits.
 - Edit and Delete at the bottom. Delete asks for confirmation here, since
   there is no undo bar behind it.
 
@@ -136,8 +146,8 @@ Each group of settings sits in its own category card:
     second lookup per watcher, because the provider has to be asked again
     from an earlier departure.
   - "Driving above" is the speed from which a leave counts as a car journey
-    rather than a walk. Above it, a watcher with a car start point routes
-    from there.
+    rather than a walk. Above it, a watcher whose car leg drives to a stop is
+    looked up from that stop.
 - Gestures: what one tap, a double tap and a hold on a home card do. Each can
   be set to open the details page, open Google Maps, show the quick actions
   menu, or do nothing.
@@ -164,6 +174,27 @@ Home screen:
 
 Settings → Updates also has a "Check now" button. Help → Updates links to the
 latest release and the full history.
+
+## A part-car commute
+
+Say you drive from home to the station, take the train into the city, and in
+the evening take the train back and drive home from the station. Two watchers
+cover it:
+
+1. "Leaving home", destination the city stop, car leg "Drive to the stop"
+   with the station as the swap stop.
+2. "Leaving work", destination home, car leg "Drive from the stop" with the
+   same station.
+
+On a car day the morning watcher notices you drive off, looks the connection
+up from the station and remembers the car is parked there. The evening watcher
+sees the waiting car, so it plans the train to the station and tells you to
+drive the last stretch — the notification ends with a "drive on from" line.
+
+On a day you take the bus instead, nothing is recorded, so the morning journey
+starts at your door and the evening one runs all the way home on public
+transport. If Ketch misses a drive, the Car card on either watcher's details
+page has the "Car is out today" switch to set it straight.
 
 ## Tips
 

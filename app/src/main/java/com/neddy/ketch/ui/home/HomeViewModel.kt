@@ -8,7 +8,8 @@ import com.neddy.ketch.data.settings.WatcherGestures
 import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
-import com.neddy.ketch.domain.OriginSelector
+import com.neddy.ketch.domain.JourneyPlanner
+import com.neddy.ketch.domain.model.ParkedCar
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
@@ -32,8 +33,16 @@ data class WatcherConnection(
     val loading: Boolean = false,
     /** Enabled, but outside its active day or time window right now. */
     val resting: Boolean = false,
+    /** Where this journey is looked up to, which the car can cut short. */
+    val destinationName: String = watcher.destination.name,
+    /** "Drive to X first" or "then drive on", when a leg is driven. */
+    val carNote: String? = null,
 ) {
     val disabled: Boolean get() = !watcher.enabled
+
+    /** The card's subtitle: where to, and whether the car covers part of it. */
+    val subtitle: String
+        get() = "To $destinationName" + (carNote?.let { " · $it" } ?: "")
 }
 
 data class HomeUiState(
@@ -329,9 +338,10 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             if (missingApiKey) return@coroutineScope
 
             val location = container.locationProvider.quickLocation()
+            val parkedCar = container.settingsRepository.currentParkedCar()
             watchers.forEachIndexed { index, watcher ->
                 if (!shouldRefresh(watcher)) return@forEachIndexed
-                val result = lookup(watcher, location)
+                val result = lookup(watcher, location, parkedCar)
                 _uiState.update { state ->
                     val connections = state.watcherConnections.toMutableList()
                     val at = connections.indexOfFirst { it.watcher.id == watcher.id }
@@ -346,18 +356,25 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
      * Routes start at the current device position; without a fix, the
      * watcher trigger location stands in for it.
      */
-    private suspend fun lookup(watcher: Watcher, location: Location?): WatcherConnection = try {
-        // Browsing the list is not leaving, so a car start never applies here.
-        val origin = OriginSelector.select(
+    private suspend fun lookup(
+        watcher: Watcher,
+        location: Location?,
+        parkedCar: ParkedCar?,
+    ): WatcherConnection = try {
+        // Browsing the list is not leaving, so nothing here counts as driving:
+        // only a car already known to be out shapes the journey.
+        val plan = JourneyPlanner.plan(
             watcher = watcher,
             latitude = location?.latitude,
             longitude = location?.longitude,
             speedKmh = null,
             carSpeedThresholdKmh = 0,
+            parkedCar = parkedCar,
+            now = System.currentTimeMillis(),
         )
         val connections = container.transitRepository.findConnections(
-            origin = origin,
-            destination = watcher.destination,
+            origin = plan.origin,
+            destination = plan.destination,
             departureTime = Instant.now(),
         )
         val best = ConnectionSelector.selectBest(
@@ -376,6 +393,8 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 null
             },
             resting = watcher.isResting(),
+            destinationName = plan.destination.name,
+            carNote = carNote(plan),
         )
     } catch (e: Exception) {
         WatcherConnection(
@@ -384,6 +403,12 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             error = userMessageFor(e),
             resting = watcher.isResting(),
         )
+    }
+
+    private fun carNote(plan: JourneyPlanner.Plan): String? = when {
+        plan.driveBefore != null -> "drive there first"
+        plan.driveAfter != null -> "then drive on"
+        else -> null
     }
 
     /** Enabled but outside its window right now — cheap to skip, still listed. */

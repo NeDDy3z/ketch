@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [WatcherEntity::class], version = 4, exportSchema = false)
+@Database(entities = [WatcherEntity::class], version = 5, exportSchema = false)
 abstract class KetchDatabase : RoomDatabase() {
 
     abstract fun watcherDao(): WatcherDao
@@ -39,6 +39,17 @@ abstract class KetchDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds which stretch of the journey the car covers. Left null, the
+         * mapper reads an existing car stop as a drive to it, which is what the
+         * column meant before.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE watchers ADD COLUMN carLegMode TEXT")
+            }
+        }
+
         fun get(context: Context): KetchDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -46,7 +57,7 @@ abstract class KetchDatabase : RoomDatabase() {
                     KetchDatabase::class.java,
                     "ketch.db",
                 )
-                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     // Safety net for any version gap without an explicit path.
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

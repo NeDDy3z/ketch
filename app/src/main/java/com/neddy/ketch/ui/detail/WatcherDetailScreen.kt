@@ -31,11 +31,13 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,10 +57,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.appContainer
+import com.neddy.ketch.domain.model.CarLeg
+import com.neddy.ketch.domain.model.ParkedCar
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
+import com.neddy.ketch.ui.components.SkeletonBox
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.ZoneId
@@ -118,7 +123,7 @@ fun WatcherDetailScreen(
                     title = watcher.name,
                     connection = main,
                     titleIconKey = watcher.icon,
-                    subtitle = "To ${watcher.destination.name}",
+                    subtitle = "To ${state.destinationName}",
                 )
                 else -> NoticeCard(
                     icon = Icons.Filled.EventBusy,
@@ -129,7 +134,18 @@ fun WatcherDetailScreen(
             }
 
             val quicker = state.quicker
-            if (main != null && quicker != null) {
+            // The alternative is a maybe, so while the lookup runs it gets a
+            // shorter placeholder than the main card and simply drops out when
+            // there turns out to be nothing worth waiting for.
+            if (state.loading) {
+                SectionLabel("Wait for a quicker one")
+                SkeletonBox(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(86.dp),
+                    shape = RoundedCornerShape(20.dp),
+                )
+            } else if (main != null && quicker != null) {
                 SectionLabel("Wait for a quicker one")
                 ConnectionCard(
                     title = "Leaves ${formatTime(quicker.departureTime)}",
@@ -138,9 +154,24 @@ fun WatcherDetailScreen(
                 )
             }
 
+            // The driven stretch is part of the journey, so it reads with the
+            // connection rather than buried among the watcher's settings.
+            if (watcher != null && watcher.carLeg.usesCar) {
+                SectionLabel("Car")
+                CarCard(
+                    watcher = watcher,
+                    parkedCar = state.parkedCar,
+                    driveBefore = state.driveBefore,
+                    driveAfter = state.driveAfter,
+                    onCarOutChange = viewModel::setCarOut,
+                )
+            }
+
+            SectionLabel("Watcher")
             if (watcher != null) {
-                SectionLabel("Watcher")
                 WatcherFacts(watcher)
+            } else {
+                WatcherFactsSkeleton()
             }
 
             Spacer(modifier = Modifier.height(2.dp))
@@ -150,6 +181,7 @@ fun WatcherDetailScreen(
             ) {
                 Button(
                     onClick = { onEdit(watcherId) },
+                    enabled = watcher != null,
                     shape = RoundedCornerShape(18.dp),
                     contentPadding = PaddingValues(vertical = 15.dp),
                     modifier = Modifier.weight(1f),
@@ -164,6 +196,7 @@ fun WatcherDetailScreen(
                 }
                 Button(
                     onClick = { confirmDelete = true },
+                    enabled = watcher != null,
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -231,15 +264,25 @@ private fun DetailTopBar(
                     modifier = Modifier.size(24.dp),
                 )
             }
-            Text(
-                text = watcher?.name.orEmpty(),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            if (watcher == null) {
+                SkeletonBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 40.dp)
+                        .height(18.dp),
+                    shape = RoundedCornerShape(9.dp),
+                )
+            } else {
+                Text(
+                    text = watcher.name,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             IconButton(
                 onClick = onRefresh,
                 enabled = !refreshing,
@@ -252,6 +295,105 @@ private fun DetailTopBar(
                     modifier = Modifier.size(22.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The drivable leg: which stretch it covers, whether the car is actually out,
+ * and the switch to say so when the trigger did not catch the drive.
+ */
+@Composable
+private fun CarCard(
+    watcher: Watcher,
+    parkedCar: ParkedCar?,
+    driveBefore: String?,
+    driveAfter: String?,
+    onCarOutChange: (Boolean) -> Unit,
+) {
+    val stopName = watcher.carStop?.name.orEmpty()
+    val active = driveBefore ?: driveAfter
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer,
+                RoundedCornerShape(20.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DirectionsCar,
+                contentDescription = null,
+                tint = if (active != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(22.dp),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = when {
+                        driveBefore != null -> "Driving to $stopName, then transit"
+                        driveAfter != null -> "Transit to $driveAfter, then driving"
+                        watcher.carLeg == CarLeg.TO_STOP ->
+                            "Could drive to $stopName"
+                        else -> "Could drive home from $stopName"
+                    },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = parkedCar
+                        ?.let { "Car waiting at ${it.place.name} since ${formatTime(it.parkedAt)}" }
+                        ?: "Car is at home",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "Car is out today",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Set this when you take the car and Ketch missed it. " +
+                        "It clears itself overnight.",
+                    fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = parkedCar != null,
+                onCheckedChange = onCarOutChange,
+            )
         }
     }
 }
@@ -281,13 +423,6 @@ private fun WatcherFacts(watcher: Watcher) {
                 "${timeFormatter.format(watcher.windowStart)}–" +
                 timeFormatter.format(watcher.windowEnd),
         )
-        watcher.carStart?.let {
-            FactRow(
-                icon = Icons.Filled.DirectionsCar,
-                label = "Car start",
-                value = it.name,
-            )
-        }
         watcher.preferredVehicle?.let {
             FactRow(
                 icon = Icons.Filled.Star,
@@ -304,6 +439,49 @@ private fun WatcherFacts(watcher: Watcher) {
             label = "Limits",
             value = limitsText(watcher),
         )
+    }
+}
+
+/** The facts card before the watcher has been read back from the database. */
+@Composable
+private fun WatcherFactsSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceContainer,
+                RoundedCornerShape(20.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        // The same four rows the loaded card always has, at their real heights,
+        // so nothing shifts when the values arrive.
+        listOf(0.42f, 0.6f, 0.34f, 0.5f).forEach { valueWidth ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SkeletonBox(
+                    modifier = Modifier.size(20.dp),
+                    shape = RoundedCornerShape(6.dp),
+                )
+                SkeletonBox(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(11.dp),
+                    shape = RoundedCornerShape(6.dp),
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                SkeletonBox(
+                    modifier = Modifier
+                        .fillMaxWidth(valueWidth)
+                        .height(12.dp),
+                    shape = RoundedCornerShape(6.dp),
+                )
+            }
+        }
     }
 }
 
@@ -394,6 +572,9 @@ private fun alternativeSubtitle(main: TransitConnection, quicker: TransitConnect
 
 private fun formatTime(instant: java.time.Instant): String =
     timeFormatter.format(instant.atZone(ZoneId.systemDefault()))
+
+private fun formatTime(epochMillis: Long): String =
+    formatTime(java.time.Instant.ofEpochMilli(epochMillis))
 
 private fun activeDaysText(days: Set<DayOfWeek>): String {
     if (days.isEmpty()) return "Never"

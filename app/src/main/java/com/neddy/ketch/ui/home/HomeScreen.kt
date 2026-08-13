@@ -168,6 +168,9 @@ private const val COLLAPSED_TITLE_SP = 19f
 
 /** How long the delete snackbar keeps undo available. */
 private const val UNDO_WINDOW_MS = 5_000L
+
+/** Width of the per-card quick actions panel. */
+private val QUICK_ACTIONS_WIDTH = 232.dp
 private val LIST_SPACING = 12.dp
 
 private val TabularNumbers = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
@@ -194,6 +197,8 @@ fun HomeScreen(
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     /** The card whose quick actions menu is open, if any. */
     var quickActionsFor by remember { mutableStateOf<Long?>(null) }
+    /** The watcher a quick-action delete is waiting on confirmation for. */
+    var confirmDelete by remember { mutableStateOf<Watcher?>(null) }
 
     // Leaving a special mode always clears its transient selection.
     fun exitMode() {
@@ -233,6 +238,17 @@ fun HomeScreen(
     fun deleteSelected() = deleteWatchers(
         state.watcherConnections.filter { it.watcher.id in selected }.map { it.watcher },
     )
+
+    confirmDelete?.let { watcher ->
+        DeleteWatcherDialog(
+            watcher = watcher,
+            onConfirm = {
+                confirmDelete = null
+                deleteWatchers(listOf(watcher))
+            },
+            onDismiss = { confirmDelete = null },
+        )
+    }
 
     state.availableUpdate?.let { update ->
         UpdateDialog(
@@ -359,7 +375,7 @@ fun HomeScreen(
                             },
                             onDeleteWatcher = {
                                 quickActionsFor = null
-                                deleteWatchers(listOf(it))
+                                confirmDelete = it
                             },
                             onRefresh = viewModel::refresh,
                             onEnableWatcher = { viewModel.setEnabled(it, true) },
@@ -401,7 +417,23 @@ private fun QuickActionsMenu(
     onReorder: () -> Unit,
     onDelete: (Watcher) -> Unit,
 ) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        // Sized to the row it belongs to rather than to its longest word, so it
+        // reads as a panel over the card instead of a cramped list.
+        modifier = Modifier.width(QUICK_ACTIONS_WIDTH),
+    ) {
+        Text(
+            text = watcher.name,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+        )
         DropdownMenuItem(
             text = { Text("Re-sync") },
             leadingIcon = { Icon(Icons.Filled.Sync, contentDescription = null) },
@@ -430,6 +462,46 @@ private fun QuickActionsMenu(
             onClick = { onDelete(watcher) },
         )
     }
+}
+
+/** Confirms a single delete from the quick actions, which has no red bar behind it. */
+@Composable
+private fun DeleteWatcherDialog(
+    watcher: Watcher,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = { Text("Delete ${watcher.name}?") },
+        text = {
+            Text(
+                text = "It stops watching straight away. Undo stays available " +
+                    "for five seconds afterwards.",
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "Delete",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 /**
@@ -1040,7 +1112,7 @@ private fun NormalContent(
                                 title = item.watcher.name,
                                 connection = connection,
                                 titleIconKey = item.watcher.icon,
-                                subtitle = "To ${item.watcher.destination.name}",
+                                subtitle = item.subtitle,
                             )
                             else -> NoConnectionCard(
                                 watcher = item.watcher,
@@ -1482,7 +1554,7 @@ private fun SelectionBox(checked: Boolean) {
  * ends once a connection has resolved, the destination until then.
  */
 private fun rowSubtitle(item: WatcherConnection): String {
-    val connection = item.connection ?: return "To ${item.watcher.destination.name}"
+    val connection = item.connection ?: return item.subtitle
     val zone = ZoneId.systemDefault()
     val departure = windowTimeFormatter.format(
         connection.legs.first().departureTime.atZone(zone),

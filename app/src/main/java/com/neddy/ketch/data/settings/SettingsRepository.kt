@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.neddy.ketch.BuildConfig
 import com.neddy.ketch.domain.WalkAdjustment
+import com.neddy.ketch.domain.model.ParkedCar
+import com.neddy.ketch.domain.model.StopPlace
 import java.time.DayOfWeek
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -113,6 +115,15 @@ data class AppSettings(
     val watcherDefaults: WatcherDefaults,
 )
 
+/** The newest release seen by the last successful check. */
+data class KnownRelease(
+    val tag: String,
+    val title: String,
+    val notes: String,
+    val downloadUrl: String,
+    val releaseUrl: String,
+)
+
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 class SettingsRepository(private val context: Context) {
@@ -128,6 +139,15 @@ class SettingsRepository(private val context: Context) {
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks_enabled")
         val UPDATE_SNOOZED_UNTIL = longPreferencesKey("update_snoozed_until")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
+        val RELEASE_TAG = stringPreferencesKey("known_release_tag")
+        val RELEASE_TITLE = stringPreferencesKey("known_release_title")
+        val RELEASE_NOTES = stringPreferencesKey("known_release_notes")
+        val RELEASE_DOWNLOAD = stringPreferencesKey("known_release_download")
+        val RELEASE_URL = stringPreferencesKey("known_release_url")
+        val PARKED_CAR_NAME = stringPreferencesKey("parked_car_name")
+        val PARKED_CAR_LAT = stringPreferencesKey("parked_car_latitude")
+        val PARKED_CAR_LNG = stringPreferencesKey("parked_car_longitude")
+        val PARKED_CAR_AT = longPreferencesKey("parked_car_at")
         val REFRESH_SCOPE = stringPreferencesKey("refresh_scope")
         val SHOW_RESTING = booleanPreferencesKey("show_resting")
         val DEFAULT_DAYS = stringPreferencesKey("default_days")
@@ -234,6 +254,41 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK] = timestamp }
     }
 
+    /**
+     * The newest release the app has heard of. Kept out of [AppSettings] because
+     * it is a cache, not a setting: it lets the prompt appear the moment the app
+     * opens, before — or without — a network answer.
+     */
+    suspend fun knownRelease(): KnownRelease? {
+        val prefs = context.dataStore.data.first()
+        val tag = prefs[Keys.RELEASE_TAG]?.takeIf { it.isNotBlank() } ?: return null
+        return KnownRelease(
+            tag = tag,
+            title = prefs[Keys.RELEASE_TITLE] ?: tag,
+            notes = prefs[Keys.RELEASE_NOTES].orEmpty(),
+            downloadUrl = prefs[Keys.RELEASE_DOWNLOAD].orEmpty(),
+            releaseUrl = prefs[Keys.RELEASE_URL].orEmpty(),
+        )
+    }
+
+    suspend fun setKnownRelease(release: KnownRelease?) {
+        context.dataStore.edit { prefs ->
+            if (release == null) {
+                prefs.remove(Keys.RELEASE_TAG)
+                prefs.remove(Keys.RELEASE_TITLE)
+                prefs.remove(Keys.RELEASE_NOTES)
+                prefs.remove(Keys.RELEASE_DOWNLOAD)
+                prefs.remove(Keys.RELEASE_URL)
+            } else {
+                prefs[Keys.RELEASE_TAG] = release.tag
+                prefs[Keys.RELEASE_TITLE] = release.title
+                prefs[Keys.RELEASE_NOTES] = release.notes
+                prefs[Keys.RELEASE_DOWNLOAD] = release.downloadUrl
+                prefs[Keys.RELEASE_URL] = release.releaseUrl
+            }
+        }
+    }
+
     suspend fun setWatcherDefaults(defaults: WatcherDefaults) {
         context.dataStore.edit { prefs ->
             prefs[Keys.DEFAULT_DAYS] =
@@ -244,6 +299,45 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.DEFAULT_MAX_TRANSFERS] = defaults.maxTransfers ?: -1
             prefs[Keys.DEFAULT_MAX_TRAVEL_MINUTES] = defaults.maxTravelMinutes ?: -1
         }
+    }
+
+    /**
+     * Where the car is waiting, shared by every watcher: one car, one place.
+     * A journey that drives out writes it, a journey that drives home reads it,
+     * and it lapses on its own so a car left at home tomorrow is not assumed to
+     * be at the station.
+     */
+    val parkedCar: Flow<ParkedCar?> = context.dataStore.data.map { it.readParkedCar() }
+
+    suspend fun currentParkedCar(): ParkedCar? = context.dataStore.data.first().readParkedCar()
+
+    suspend fun setParkedCar(car: ParkedCar?) {
+        context.dataStore.edit { prefs ->
+            if (car == null) {
+                prefs.remove(Keys.PARKED_CAR_NAME)
+                prefs.remove(Keys.PARKED_CAR_LAT)
+                prefs.remove(Keys.PARKED_CAR_LNG)
+                prefs.remove(Keys.PARKED_CAR_AT)
+            } else {
+                prefs[Keys.PARKED_CAR_NAME] = car.place.name
+                prefs[Keys.PARKED_CAR_LAT] = car.place.latitude.toString()
+                prefs[Keys.PARKED_CAR_LNG] = car.place.longitude.toString()
+                prefs[Keys.PARKED_CAR_AT] = car.parkedAt
+            }
+        }
+    }
+
+    private fun Preferences.readParkedCar(): ParkedCar? {
+        val latitude = this[Keys.PARKED_CAR_LAT]?.toDoubleOrNull() ?: return null
+        val longitude = this[Keys.PARKED_CAR_LNG]?.toDoubleOrNull() ?: return null
+        return ParkedCar(
+            place = StopPlace(
+                name = this[Keys.PARKED_CAR_NAME].orEmpty(),
+                latitude = latitude,
+                longitude = longitude,
+            ),
+            parkedAt = this[Keys.PARKED_CAR_AT] ?: return null,
+        )
     }
 
     private fun Preferences.action(

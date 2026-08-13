@@ -153,4 +153,38 @@ class ConnectionFormatterTest {
             ConnectionFormatter.notificationBigText(connection, zone),
         )
     }
+
+    @Test
+    fun `a driven first leg is a line above the boardings`() {
+        assertEquals(
+            "🚗 Drive to Cesky Brod\n" +
+                "16:00 Praha hl.n. (R41) 🚆\n" +
+                "16:30 Cesky Brod (660) 🚌\n" +
+                "17:00 Kostelec n.C. lesy",
+            ConnectionFormatter.notificationBigText(
+                withTransfer,
+                zone,
+                driveBefore = "Cesky Brod",
+            ),
+        )
+    }
+
+    @Test
+    fun `a driven last leg is a line below the arrival and flagged in the body`() {
+        assertEquals(
+            "16:00 Praha hl.n. (R41) 🚆\n" +
+                "16:30 Cesky Brod (660) 🚌\n" +
+                "17:00 Kostelec n.C. lesy\n" +
+                "🚗 Drive on from Cesky Brod",
+            ConnectionFormatter.notificationBigText(
+                withTransfer,
+                zone,
+                driveAfter = "Cesky Brod",
+            ),
+        )
+        assertEquals(
+            "16:00 Praha hl.n. (R41) 🚆 → arrives 17:00 · 1 transfer · then drive",
+            ConnectionFormatter.notificationText(withTransfer, zone, driveAfter = true),
+        )
+    }
 }

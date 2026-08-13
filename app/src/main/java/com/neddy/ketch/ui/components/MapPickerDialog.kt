@@ -132,8 +132,15 @@ fun MapPickerDialog(
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // Choosing a suggestion moves the map, which the keyboard would cover.
+    // The field has to give up focus first and be forced to: while it still
+    // holds focus the IME comes straight back, and this runs inside a dialog
+    // window, where a plain hide() on its own does not stick.
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val dismissKeyboard = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
 
     val start = initial ?: PRAGUE
     val cameraPositionState = rememberCameraPositionState {
@@ -200,6 +207,7 @@ fun MapPickerDialog(
                 ),
                 contentPadding = PaddingValues(top = 88.dp, bottom = 152.dp),
                 onMapClick = {
+                    dismissKeyboard()
                     picked = it
                     pickedLabel = null
                 },
@@ -324,8 +332,7 @@ fun MapPickerDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            keyboardController?.hide()
-                                            focusManager.clearFocus()
+                                            dismissKeyboard()
                                             val position = LatLng(
                                                 suggestion.latitude,
                                                 suggestion.longitude,
