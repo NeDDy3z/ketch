@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -129,6 +131,9 @@ fun MapPickerDialog(
     var suggestions by remember { mutableStateOf<List<PlaceSuggestion>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // Choosing a suggestion moves the map, which the keyboard would cover.
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     val start = initial ?: PRAGUE
     val cameraPositionState = rememberCameraPositionState {
@@ -319,6 +324,8 @@ fun MapPickerDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
                                             val position = LatLng(
                                                 suggestion.latitude,
                                                 suggestion.longitude,

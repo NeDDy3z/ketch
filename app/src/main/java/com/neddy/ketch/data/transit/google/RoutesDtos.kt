@@ -46,6 +46,8 @@ data class RouteLegDto(
 @Serializable
 data class RouteStepDto(
     val travelMode: String? = null,
+    /** Seconds with a trailing "s", for example "540s". */
+    val staticDuration: String? = null,
     val transitDetails: TransitDetailsDto? = null,
 )
 

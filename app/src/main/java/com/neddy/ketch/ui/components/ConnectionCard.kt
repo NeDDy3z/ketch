@@ -70,7 +70,7 @@ fun ConnectionCard(
     title: String,
     connection: TransitConnection,
     modifier: Modifier = Modifier,
-    titleIcon: ImageVector? = null,
+    titleIconKey: String? = null,
     subtitle: String? = null,
 ) {
     val zone = ZoneId.systemDefault()
@@ -86,7 +86,7 @@ fun ConnectionCard(
             WatcherCardHeader(
                 title = title,
                 subtitle = subtitle,
-                titleIcon = titleIcon,
+                titleIconKey = titleIconKey,
                 trailingContent = {
                     DurationPill(minutes = connection.travelDuration.toMinutes())
                 },
@@ -110,7 +110,7 @@ fun WatcherCardHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    titleIcon: ImageVector? = null,
+    titleIconKey: String? = null,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -118,21 +118,19 @@ fun WatcherCardHeader(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (titleIcon != null) {
+        if (titleIconKey != null) {
+            val tile = MaterialTheme.colorScheme.primaryContainer
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = MaterialTheme.shapes.extraSmall,
-                    ),
+                    .background(color = tile, shape = MaterialTheme.shapes.extraSmall),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = titleIcon,
-                    contentDescription = null,
+                WatcherIcon(
+                    iconKey = titleIconKey,
+                    size = 24.dp,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp),
+                    badgeBackground = tile,
                 )
             }
         }

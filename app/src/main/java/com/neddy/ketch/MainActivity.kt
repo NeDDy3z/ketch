@@ -18,6 +18,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.neddy.ketch.data.settings.ColorPalette
+import com.neddy.ketch.ui.detail.WatcherDetailScreen
 import com.neddy.ketch.ui.editor.WatcherEditScreen
 import com.neddy.ketch.ui.help.HelpScreen
 import com.neddy.ketch.ui.home.HomeScreen
@@ -62,6 +63,7 @@ fun KetchRoot() {
                 HomeScreen(
                     onCreateWatcher = { navController.navigate(Routes.watcherEdit()) },
                     onEditWatcher = { id -> navController.navigate(Routes.watcherEdit(id)) },
+                    onOpenWatcher = { id -> navController.navigate(Routes.watcherDetail(id)) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onOpenHelp = { navController.navigate(Routes.HELP) },
                 )
@@ -74,6 +76,18 @@ fun KetchRoot() {
             }
             composable(Routes.HELP) {
                 HelpScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.WATCHER_DETAIL,
+                arguments = listOf(
+                    navArgument("watcherId") { type = NavType.LongType },
+                ),
+            ) { entry ->
+                WatcherDetailScreen(
+                    watcherId = entry.arguments?.getLong("watcherId") ?: -1L,
+                    onBack = { navController.popBackStack() },
+                    onEdit = { id -> navController.navigate(Routes.watcherEdit(id)) },
+                )
             }
             composable(
                 route = Routes.WATCHER_EDIT,

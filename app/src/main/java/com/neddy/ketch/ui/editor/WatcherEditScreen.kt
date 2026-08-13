@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsBoat
 import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.DirectionsRailway
 import androidx.compose.material.icons.filled.DirectionsSubway
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -80,6 +81,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -96,6 +99,7 @@ import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.VehicleCategory
 import com.neddy.ketch.ui.components.MapPickerDialog
 import com.neddy.ketch.ui.components.SkeletonBox
+import com.neddy.ketch.ui.components.WatcherIcon
 import com.neddy.ketch.ui.components.watcherIconCatalog
 import java.time.DayOfWeek
 import java.util.Locale
@@ -112,6 +116,15 @@ fun WatcherEditScreen(
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var mapPickerTarget by remember { mutableStateOf<MapPickerTarget?>(null) }
+
+    // Picking a suggestion finishes the search, so the keyboard has nothing
+    // left to type into and would only cover the rest of the form.
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val dismissKeyboard = {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
 
     LaunchedEffect(state.saved) {
         if (state.saved) onDone()
@@ -168,31 +181,30 @@ fun WatcherEditScreen(
                     horizontalArrangement = Arrangement.spacedBy(9.dp),
                     contentPadding = PaddingValues(bottom = 6.dp),
                 ) {
-                    items(watcherIconCatalog, key = { it.first }) { (key, image) ->
-                        val selected = state.icon == key
+                    items(watcherIconCatalog, key = { it.key }) { spec ->
+                        val selected = state.icon == spec.key
+                        val tile = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        }
                         Box(
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHighest
-                                    },
-                                )
-                                .clickable { viewModel.setIcon(key) },
+                                .background(tile)
+                                .clickable { viewModel.setIcon(spec.key) },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = image,
-                                contentDescription = key,
+                            WatcherIcon(
+                                iconKey = spec.key,
+                                size = 23.dp,
                                 tint = if (selected) {
                                     MaterialTheme.colorScheme.onPrimary
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },
-                                modifier = Modifier.size(23.dp),
+                                badgeBackground = tile,
                             )
                         }
                     }
@@ -225,7 +237,10 @@ fun WatcherEditScreen(
                         items = state.triggerResults.take(6),
                         title = { it.name },
                         subtitle = { it.address },
-                        onSelect = viewModel::selectTriggerSuggestion,
+                        onSelect = {
+                            dismissKeyboard()
+                            viewModel.selectTriggerSuggestion(it)
+                        },
                     )
                 }
                 LeaveRadiusCard(
@@ -259,8 +274,61 @@ fun WatcherEditScreen(
                         items = state.searchResults.take(6),
                         title = { it.name },
                         subtitle = { "%.5f, %.5f".format(it.latitude, it.longitude) },
-                        onSelect = viewModel::selectDestination,
+                        onSelect = {
+                            dismissKeyboard()
+                            viewModel.selectDestination(it)
+                        },
                     )
+                }
+            }
+
+            // Car start
+            EditorSection(
+                icon = Icons.Filled.DirectionsCar,
+                iconTint = MaterialTheme.colorScheme.primary,
+                title = "Car start",
+                titleSuffix = " · optional",
+            ) {
+                SearchField(
+                    query = state.carStartQuery,
+                    placeholder = "Where you park, e.g. a park and ride",
+                    searching = state.carStartSearching,
+                    isError = false,
+                    showCheck = state.carStart != null,
+                    onQueryChange = viewModel::setCarStartQuery,
+                    onOpenMap = { mapPickerTarget = MapPickerTarget.CAR_START },
+                )
+                state.carStartSearchError?.let { InlineErrorHelper(it) }
+                if (state.carStartResults.isNotEmpty()) {
+                    SuggestionList(
+                        items = state.carStartResults.take(6),
+                        title = { it.name },
+                        subtitle = { it.address },
+                        onSelect = {
+                            dismissKeyboard()
+                            viewModel.selectCarStartSuggestion(it)
+                        },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Used when you leave fast enough to be driving.",
+                        fontSize = 12.sp,
+                        lineHeight = 17.4.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 4.dp),
+                    )
+                    if (state.carStart != null) {
+                        TextButton(onClick = viewModel::clearCarStart) {
+                            Text(text = "Clear", fontSize = 13.sp)
+                        }
+                    }
                 }
             }
 
@@ -455,17 +523,23 @@ fun WatcherEditScreen(
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         val isTrigger = target == MapPickerTarget.TRIGGER
         MapPickerDialog(
-            title = if (isTrigger) "Trigger location" else "Destination",
-            initial = when {
-                isTrigger && state.hasTriggerLocation -> LatLng(
-                    state.triggerLatitude ?: 0.0,
-                    state.triggerLongitude ?: 0.0,
-                )
-                !isTrigger && state.destination != null -> LatLng(
-                    state.destination?.latitude ?: 0.0,
-                    state.destination?.longitude ?: 0.0,
-                )
-                else -> null
+            title = when (target) {
+                MapPickerTarget.TRIGGER -> "Trigger location"
+                MapPickerTarget.CAR_START -> "Car start"
+                MapPickerTarget.DESTINATION -> "Destination"
+            },
+            initial = when (target) {
+                MapPickerTarget.TRIGGER -> if (state.hasTriggerLocation) {
+                    LatLng(state.triggerLatitude ?: 0.0, state.triggerLongitude ?: 0.0)
+                } else {
+                    null
+                }
+                MapPickerTarget.CAR_START -> state.carStart?.let {
+                    LatLng(it.latitude, it.longitude)
+                }
+                MapPickerTarget.DESTINATION -> state.destination?.let {
+                    LatLng(it.latitude, it.longitude)
+                }
             },
             radiusMeters = if (isTrigger) state.triggerRadiusMeters else null,
             myLocationEnabled = hasLocationPermission,
@@ -473,12 +547,16 @@ fun WatcherEditScreen(
                 viewModel.currentLocation()?.let { (lat, lng) -> LatLng(lat, lng) }
             },
             searchPlaces = viewModel::searchAddresses,
+            isTrigger = isTrigger,
             onDismiss = { mapPickerTarget = null },
             onPick = { latLng ->
-                if (isTrigger) {
-                    viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
-                } else {
-                    viewModel.pickDestinationOnMap(latLng.latitude, latLng.longitude)
+                when (target) {
+                    MapPickerTarget.TRIGGER ->
+                        viewModel.setTriggerLocation(latLng.latitude, latLng.longitude)
+                    MapPickerTarget.CAR_START ->
+                        viewModel.pickCarStartOnMap(latLng.latitude, latLng.longitude)
+                    MapPickerTarget.DESTINATION ->
+                        viewModel.pickDestinationOnMap(latLng.latitude, latLng.longitude)
                 }
                 mapPickerTarget = null
             },
@@ -486,7 +564,7 @@ fun WatcherEditScreen(
     }
 }
 
-private enum class MapPickerTarget { TRIGGER, DESTINATION }
+private enum class MapPickerTarget { TRIGGER, CAR_START, DESTINATION }
 
 @Composable
 private fun EditorTopBar(

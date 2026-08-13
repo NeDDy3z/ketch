@@ -143,6 +143,42 @@ class ConnectionSelectorTest {
     }
 
     @Test
+    fun `quicker alternative leaves later and travels shorter`() {
+        // busFast: 14:00 -> 14:40 (40 min). trainLateArrival: 14:20 -> 15:05,
+        // 45 min, so it is later but not quicker. direct is 65 min.
+        val quickLater = single("BUS", "2026-07-14T14:15:00Z", "2026-07-14T14:45:00Z")
+        val alternative = ConnectionSelector.selectQuickerAlternative(
+            connections = listOf(busFast, trainLateArrival, direct, quickLater),
+            main = busFast,
+        )
+        assertEquals(quickLater, alternative)
+    }
+
+    @Test
+    fun `no quicker alternative when everything later is slower`() {
+        val alternative = ConnectionSelector.selectQuickerAlternative(
+            connections = listOf(busFast, trainLateArrival, direct),
+            main = busFast,
+        )
+        assertNull(alternative)
+    }
+
+    @Test
+    fun `quicker alternative respects the watcher limits`() {
+        // Quicker and later, but it needs a transfer the watcher does not allow.
+        val quickWithTransfer = connection(
+            "2026-07-14T14:10:00Z" to "2026-07-14T14:20:00Z",
+            "2026-07-14T14:22:00Z" to "2026-07-14T14:35:00Z",
+        )
+        val alternative = ConnectionSelector.selectQuickerAlternative(
+            connections = listOf(busFast, quickWithTransfer),
+            main = busFast,
+            maxTransfers = 0,
+        )
+        assertNull(alternative)
+    }
+
+    @Test
     fun `preference still respects the hard limits`() {
         // Train is preferred but breaks the max travel minutes limit, so the
         // bus is the only eligible connection.

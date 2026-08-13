@@ -15,6 +15,10 @@ data class WatcherEntity(
     val destinationName: String,
     val destinationLatitude: Double,
     val destinationLongitude: Double,
+    /** Optional car start point, all three columns set or all three null. */
+    val carStartName: String? = null,
+    val carStartLatitude: Double? = null,
+    val carStartLongitude: Double? = null,
     val triggerLatitude: Double,
     val triggerLongitude: Double,
     val triggerRadiusMeters: Int,
@@ -38,6 +42,11 @@ fun WatcherEntity.toDomain(): Watcher = Watcher(
     name = name,
     icon = icon,
     destination = StopPlace(destinationName, destinationLatitude, destinationLongitude),
+    carStart = if (carStartLatitude != null && carStartLongitude != null) {
+        StopPlace(carStartName.orEmpty(), carStartLatitude, carStartLongitude)
+    } else {
+        null
+    },
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,
@@ -65,6 +74,9 @@ fun Watcher.toEntity(): WatcherEntity = WatcherEntity(
     destinationName = destination.name,
     destinationLatitude = destination.latitude,
     destinationLongitude = destination.longitude,
+    carStartName = carStart?.name,
+    carStartLatitude = carStart?.latitude,
+    carStartLongitude = carStart?.longitude,
     triggerLatitude = triggerLatitude,
     triggerLongitude = triggerLongitude,
     triggerRadiusMeters = triggerRadiusMeters,

@@ -32,7 +32,11 @@ stop and arrival time. Walking segments are always excluded.
   address, station or stop, picked on a map, or set to your current position;
   the route always starts from where you are. Transitions are confirmed against
   a fresh fix so GPS jitter does not fire a false departure
-- Per watcher icon picker
+- Per watcher icon picker, including combinations such as home by car or
+  work on foot
+- Optional car start per watcher: leave fast enough to be driving and the
+  route starts where you park, for example a park and ride, instead of at
+  your door. Leave slowly and it stays a walk to the nearest stop
 - Optional limits per watcher: maximum transfers and maximum travel time
 - Preferred connection per watcher: pick a vehicle type (train, bus, tram,
   metro, ferry) and Ketch chooses a connection using it, unless it is slower
@@ -40,10 +44,16 @@ stop and arrival time. Walking segments are always excluded.
 - Home screen listing every watcher with its current fastest connection, in
   your own order: pull to refresh, drag or arrow to reorder, and multi select
   to delete from the top right menu (which also opens Settings)
+- Watcher details on long press: the connection you would be told to catch
+  now, a quicker one worth waiting for when it exists, and edit and delete
+- Walk time reduction: shave a percentage off the routing provider's walking
+  estimate so connections you can still catch are not written off
 - Refresh scope setting: pull to refresh can look up every watcher or only the
   ones whose active day and time window contain the current moment
 - Home screen widget showing live connections for selected watchers with a
   manual refresh button
+- Update check against the GitHub release page, with update, later, or stop
+  asking, plus a manual check in Settings
 - Modern Material 3 (Material You) design with dynamic colors and light, dark,
   and system themes. A cohesive rounded shape scale keeps inputs, chips, cards,
   and buttons in one visual family, with an emphasized type scale for hierarchy

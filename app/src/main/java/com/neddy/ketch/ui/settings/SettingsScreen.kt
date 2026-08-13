@@ -24,9 +24,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallpaper
@@ -70,8 +72,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.neddy.ketch.BuildConfig
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.ColorPalette
-import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.data.settings.RefreshScope
+import com.neddy.ketch.data.settings.SettingsRepository
+import com.neddy.ketch.data.update.UpdateRepository
+import com.neddy.ketch.domain.WalkAdjustment
 import com.neddy.ketch.ui.components.SkeletonBox
 import com.neddy.ketch.ui.theme.description
 import com.neddy.ketch.ui.theme.displayName
@@ -85,6 +89,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
     val context = LocalContext.current
     val viewModel: SettingsViewModel = viewModel { SettingsViewModel(context.appContainer) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val updateCheck by viewModel.updateCheck.collectAsStateWithLifecycle()
     var paletteSheetOpen by remember { mutableStateOf(false) }
     var windowDialogOpen by remember { mutableStateOf(false) }
     var radiusDialogOpen by remember { mutableStateOf(false) }
@@ -165,28 +170,33 @@ fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
                 )
             }
 
-            SettingsGroup(title = "Editing") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer),
-                ) {
-                    RadioRow(
-                        selected = current.editGesture == EditGesture.TAP,
-                        title = "Open a watcher by tap",
-                        onClick = { viewModel.setEditGesture(EditGesture.TAP) },
-                    )
-                    HorizontalDivider(
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                    RadioRow(
-                        selected = current.editGesture == EditGesture.HOLD,
-                        title = "Open by long-press",
-                        onClick = { viewModel.setEditGesture(EditGesture.HOLD) },
-                    )
-                }
+            SettingsGroup(title = "Journey") {
+                SliderCard(
+                    title = "Walk faster than the map thinks",
+                    value = current.walkReductionPercent.toFloat(),
+                    valueLabel = if (current.walkReductionPercent == 0) {
+                        "Off"
+                    } else {
+                        "-${current.walkReductionPercent}%"
+                    },
+                    valueRange = 0f..WalkAdjustment.MAX_PERCENT.toFloat(),
+                    steps = 9,
+                    onValueChange = { viewModel.setWalkReductionPercent(it.toInt()) },
+                    description = "Takes this much off the calculated walking time, " +
+                        "so connections you can still make are not written off. " +
+                        "Costs a second lookup per watcher.",
+                )
+                SliderCard(
+                    title = "Driving above",
+                    value = current.carSpeedThresholdKmh.toFloat(),
+                    valueLabel = "${current.carSpeedThresholdKmh} km/h",
+                    valueRange = SettingsRepository.MIN_CAR_SPEED_KMH.toFloat()..
+                        SettingsRepository.MAX_CAR_SPEED_KMH.toFloat(),
+                    steps = 7,
+                    onValueChange = { viewModel.setCarSpeedThresholdKmh(it.toInt()) },
+                    description = "Leave this fast and Ketch assumes you took the car, " +
+                        "routing from a watcher's car start point instead of your door.",
+                )
             }
 
             SettingsGroup(title = "Gestures") {
@@ -227,6 +237,12 @@ fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
                         onCheckedChange = viewModel::setDoubleTapOpensMaps,
                     )
                 }
+                Text(
+                    text = "Tap a watcher to edit it, long-press to open its details.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
 
             SettingsGroup(title = "Refresh") {
@@ -384,6 +400,15 @@ fun SettingsScreen(onBack: () -> Unit, onOpenHelp: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                 }
+            }
+
+            SettingsGroup(title = "Updates") {
+                UpdatesCard(
+                    enabled = current.updateChecksEnabled,
+                    checkState = updateCheck,
+                    onEnabledChange = viewModel::setUpdateChecksEnabled,
+                    onCheckNow = viewModel::checkForUpdate,
+                )
             }
 
             SettingsGroup(title = "Support") {
@@ -778,6 +803,196 @@ private fun RadioRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Ketch is sideloaded, so this card is the whole update story: the automatic
+ * watch on the release page, a manual check, and the way out to the download
+ * when there is something newer.
+ */
+@Composable
+private fun UpdatesCard(
+    enabled: Boolean,
+    checkState: UpdateCheckState,
+    onEnabledChange: (Boolean) -> Unit,
+    onCheckNow: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SystemUpdate,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = "Watch for new releases",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "Checks the GitHub release page a few times a day and " +
+                        "offers the new APK. Turn back on here after " +
+                        "“Don't remind me”.",
+                    fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "This build",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = when (checkState) {
+                        UpdateCheckState.Idle ->
+                            "Ketch ${BuildConfig.VERSION_NAME}"
+                        UpdateCheckState.Checking -> "Checking…"
+                        UpdateCheckState.UpToDate ->
+                            "Ketch ${BuildConfig.VERSION_NAME} · up to date"
+                        is UpdateCheckState.Available ->
+                            "Ketch ${checkState.update.version} available"
+                    },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (checkState is UpdateCheckState.Available) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+            if (checkState is UpdateCheckState.Available) {
+                TextButton(
+                    onClick = { uriHandler.openUri(checkState.update.downloadUrl) },
+                ) {
+                    Text(text = "Get it", fontWeight = FontWeight.SemiBold)
+                }
+            }
+            TextButton(
+                onClick = onCheckNow,
+                enabled = checkState != UpdateCheckState.Checking,
+            ) {
+                Text(text = "Check now")
+            }
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { uriHandler.openUri(UpdateRepository.LATEST_RELEASE_URL) }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.NewReleases,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = "Latest release on GitHub",
+                fontSize = 15.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * A setting that is a number on a scale: the value reads out next to its title
+ * and the explanation sits under the slider, so the card says what moving it
+ * actually does.
+ */
+@Composable
+private fun SliderCard(
+    title: String,
+    value: Float,
+    valueLabel: String,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onValueChange: (Float) -> Unit,
+    description: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = valueLabel,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                style = TextStyle(fontFeatureSettings = "tnum"),
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+        )
+        Text(
+            text = description,
+            fontSize = 12.sp,
+            lineHeight = 17.4.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

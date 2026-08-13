@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,12 +56,14 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwipeVertical
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.SwipeVertical
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -115,6 +118,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -127,14 +131,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.neddy.ketch.BuildConfig
 import com.neddy.ketch.appContainer
-import com.neddy.ketch.data.settings.EditGesture
+import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.maps.TransitDirections
 import com.neddy.ketch.ui.components.ConnectionCard
 import com.neddy.ketch.ui.components.ConnectionCardSkeleton
 import com.neddy.ketch.ui.components.WatcherCardHeader
-import com.neddy.ketch.ui.components.watcherIcon
+import com.neddy.ketch.ui.components.WatcherIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.ZoneId
@@ -177,6 +182,7 @@ private fun windowText(watcher: Watcher): String =
 fun HomeScreen(
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
+    onOpenWatcher: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHelp: () -> Unit,
 ) {
@@ -222,6 +228,15 @@ fun HomeScreen(
             timeout.cancel()
             if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete()
         }
+    }
+
+    state.availableUpdate?.let { update ->
+        UpdateDialog(
+            update = update,
+            onUpdate = viewModel::updateOpened,
+            onLater = viewModel::snoozeUpdate,
+            onNever = viewModel::dismissUpdatesForever,
+        )
     }
 
     Scaffold(
@@ -327,6 +342,7 @@ fun HomeScreen(
                             backdrop = backdrop,
                             onCreateWatcher = onCreateWatcher,
                             onEditWatcher = onEditWatcher,
+                            onOpenWatcher = onOpenWatcher,
                             onRefresh = viewModel::refresh,
                             onEnableWatcher = { viewModel.setEnabled(it, true) },
                         )
@@ -350,6 +366,86 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/**
+ * Ketch is sideloaded, so it tells the user about a new build itself. Three
+ * ways out, all final in their own way: update now, ask again tomorrow, or
+ * stop asking until Settings says otherwise.
+ */
+@Composable
+private fun UpdateDialog(
+    update: AppUpdate,
+    onUpdate: () -> Unit,
+    onLater: () -> Unit,
+    onNever: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    AlertDialog(
+        onDismissRequest = onLater,
+        icon = {
+            Icon(
+                imageVector = Icons.Filled.SystemUpdate,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        title = { Text("Ketch ${update.version} is out") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "You are on ${BuildConfig.VERSION_NAME}. " +
+                        "Updating opens the release download in your browser.",
+                    fontSize = 13.5.sp,
+                    lineHeight = 19.sp,
+                )
+                if (update.notes.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Text(
+                            text = update.notes.lines().take(6).joinToString("\n"),
+                            fontSize = 12.5.sp,
+                            lineHeight = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .heightIn(max = 180.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+                TextButton(
+                    onClick = { uriHandler.openUri(update.releaseUrl) },
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text(text = "Open the release page", fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    uriHandler.openUri(update.downloadUrl)
+                    onUpdate()
+                },
+            ) {
+                Text(text = "Update", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onNever) {
+                    Text(
+                        text = "Don't remind me",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onLater) { Text("Later") }
+            }
+        },
+    )
 }
 
 /**
@@ -774,6 +870,7 @@ private fun NormalContent(
     backdrop: GraphicsLayer,
     onCreateWatcher: () -> Unit,
     onEditWatcher: (Long) -> Unit,
+    onOpenWatcher: (Long) -> Unit,
     onRefresh: () -> Unit,
     onEnableWatcher: (Watcher) -> Unit,
 ) {
@@ -827,12 +924,12 @@ private fun NormalContent(
                 state.visibleWatcherConnections,
                 key = { _, item -> item.watcher.id },
             ) { _, item ->
-                val open = { onEditWatcher(item.watcher.id) }
-                val tapToEdit = state.editGesture == EditGesture.TAP
                 Box(
                     modifier = Modifier.combinedClickable(
-                        onClick = { if (tapToEdit) open() },
-                        onLongClick = { if (!tapToEdit) open() },
+                        onClick = { onEditWatcher(item.watcher.id) },
+                        // Hold is the way into the details page: the connection
+                        // in full, with an alternative and the row's actions.
+                        onLongClick = { onOpenWatcher(item.watcher.id) },
                         // Double tap hands the route to Google Maps as public
                         // transport directions to the watcher destination, when
                         // the gesture is enabled in Settings.
@@ -857,7 +954,7 @@ private fun NormalContent(
                             connection != null -> ConnectionCard(
                                 title = item.watcher.name,
                                 connection = connection,
-                                titleIcon = watcherIcon(item.watcher.icon),
+                                titleIconKey = item.watcher.icon,
                                 subtitle = "To ${item.watcher.destination.name}",
                             )
                             else -> NoConnectionCard(
@@ -1100,8 +1197,8 @@ private fun ReorderList(
                         },
                         modifier = Modifier.size(22.dp),
                     )
-                    IconTile(
-                        icon = watcherIcon(item.watcher.icon),
+                    WatcherIconTile(
+                        iconKey = item.watcher.icon,
                         size = 36.dp,
                         cornerRadius = 12.dp,
                         background = if (isDragging) {
@@ -1220,8 +1317,8 @@ private fun DeleteList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SelectionBox(checked = checked)
-                    IconTile(
-                        icon = watcherIcon(item.watcher.icon),
+                    WatcherIconTile(
+                        iconKey = item.watcher.icon,
                         size = 38.dp,
                         cornerRadius = 12.dp,
                         background = if (checked) {
@@ -1309,6 +1406,31 @@ private fun rowSubtitle(item: WatcherConnection): String {
     return "${connection.travelDuration.toMinutes()} min · $departure → $arrival"
 }
 
+/** The same tile carrying a watcher's own icon, combined glyphs included. */
+@Composable
+private fun WatcherIconTile(
+    iconKey: String,
+    size: Dp,
+    cornerRadius: Dp,
+    background: Color,
+    iconTint: Color,
+    iconSize: Dp,
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .background(background, RoundedCornerShape(cornerRadius)),
+        contentAlignment = Alignment.Center,
+    ) {
+        WatcherIcon(
+            iconKey = iconKey,
+            size = iconSize,
+            tint = iconTint,
+            badgeBackground = background,
+        )
+    }
+}
+
 /** Small rounded icon tile used by the list rows. */
 @Composable
 private fun IconTile(
@@ -1367,8 +1489,8 @@ private fun DisabledCard(watcher: Watcher, onEnable: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconTile(
-                    icon = watcherIcon(watcher.icon),
+                WatcherIconTile(
+                    iconKey = watcher.icon,
                     size = 44.dp,
                     cornerRadius = 14.dp,
                     background = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1440,7 +1562,7 @@ private fun NoConnectionCard(
             WatcherCardHeader(
                 title = watcher.name,
                 subtitle = "${windowText(watcher)} window",
-                titleIcon = watcherIcon(watcher.icon),
+                titleIconKey = watcher.icon,
             )
             InfoPanel(
                 icon = Icons.Filled.EventBusy,

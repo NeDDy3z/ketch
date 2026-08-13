@@ -2,10 +2,12 @@ package com.neddy.ketch.data.transit.google
 
 import com.neddy.ketch.data.settings.SettingsRepository
 import com.neddy.ketch.data.transit.TransitRepository
+import com.neddy.ketch.domain.WalkAdjustment
 import com.neddy.ketch.domain.model.PlaceSuggestion
 import com.neddy.ketch.domain.model.StopPlace
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.TransitLeg
+import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -19,7 +21,39 @@ class GoogleTransitRepository(
     private val settingsRepository: SettingsRepository,
 ) : TransitRepository {
 
+    /**
+     * Routes departing at or after [departureTime]. With the walk reduction
+     * switched on this costs a second lookup: the provider plans the walk at
+     * its own pace, so the only way to surface the connections a faster walker
+     * can still make is to ask again from an earlier departure and then drop
+     * whatever is out of reach even at the reduced pace.
+     */
     override suspend fun findConnections(
+        origin: StopPlace,
+        destination: StopPlace,
+        departureTime: Instant,
+    ): List<TransitConnection> {
+        val connections = computeRoutes(origin, destination, departureTime)
+        val percent = settingsRepository.current().walkReductionPercent
+        if (percent <= 0 || connections.isEmpty()) return connections
+
+        val longestWalk = connections.maxOf { it.accessWalk }
+        val shift = WalkAdjustment.saving(longestWalk, percent)
+        if (shift < MIN_WALK_SHIFT) return connections
+
+        val earlier = runCatching {
+            computeRoutes(origin, destination, departureTime.minus(shift))
+        }.getOrDefault(emptyList())
+        val reachable = earlier.filter {
+            WalkAdjustment.isReachable(it, departureTime, percent)
+        }
+        // The earlier pass can miss departures the first one found, so the two
+        // are merged rather than swapped; anything from the first pass is
+        // reachable by definition, the provider planned it from now.
+        return (reachable + connections).distinctBy { it.legs }
+    }
+
+    private suspend fun computeRoutes(
         origin: StopPlace,
         destination: StopPlace,
         departureTime: Instant,
@@ -107,12 +141,18 @@ class GoogleTransitRepository(
     )
 
     private fun RouteDto.toConnection(): TransitConnection? {
-        val legs = legs
-            .flatMap { it.steps }
+        val steps = legs.flatMap { it.steps }
+        val transitLegs = steps
             .filter { it.travelMode == "TRANSIT" }
             .mapNotNull { it.toLeg() }
-        if (legs.isEmpty()) return null
-        return TransitConnection(legs)
+        if (transitLegs.isEmpty()) return null
+        // Everything walked before the first boarding, which is what stands
+        // between leaving now and catching that vehicle.
+        val accessWalk = steps
+            .takeWhile { it.travelMode != "TRANSIT" }
+            .mapNotNull { it.staticDuration?.let(::parseDuration) }
+            .fold(Duration.ZERO, Duration::plus)
+        return TransitConnection(legs = transitLegs, accessWalk = accessWalk)
     }
 
     private fun RouteStepDto.toLeg(): TransitLeg? {
@@ -137,8 +177,16 @@ class GoogleTransitRepository(
     private fun parseInstant(value: String): Instant? =
         runCatching { Instant.parse(value) }.getOrNull()
 
+    /** Protobuf duration, seconds with a trailing "s". */
+    private fun parseDuration(value: String): Duration? =
+        value.removeSuffix("s").toDoubleOrNull()
+            ?.let { Duration.ofSeconds(it.toLong()) }
+
     companion object {
         private const val NEAREST_STOP_RADIUS_METERS = 500.0
         private const val MAX_ADDRESS_SUGGESTIONS = 3
+
+        /** Below this the second lookup cannot buy an earlier departure. */
+        private val MIN_WALK_SHIFT: Duration = Duration.ofMinutes(1)
     }
 }

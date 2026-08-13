@@ -7,8 +7,8 @@ import androidx.work.WorkerParameters
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
+import com.neddy.ketch.domain.OriginSelector
 import com.neddy.ketch.domain.TriggerConfirmation
-import com.neddy.ketch.domain.model.StopPlace
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZonedDateTime
@@ -65,10 +65,15 @@ class ConnectionLookupWorker(
             return Result.success()
         }
 
-        val origin = StopPlace(
-            name = "Current location",
-            latitude = location?.latitude ?: watcher.triggerLatitude,
-            longitude = location?.longitude ?: watcher.triggerLongitude,
+        // The fix behind the trigger is the one moment the app knows how the
+        // user actually left, so this is where the car start earns its keep.
+        val speedKmh = location?.takeIf { it.hasSpeed() }?.let { it.speed * 3.6 }
+        val origin = OriginSelector.select(
+            watcher = watcher,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            speedKmh = speedKmh,
+            carSpeedThresholdKmh = container.settingsRepository.current().carSpeedThresholdKmh,
         )
 
         val connections = try {

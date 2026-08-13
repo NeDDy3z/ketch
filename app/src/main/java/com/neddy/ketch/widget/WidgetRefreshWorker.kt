@@ -11,7 +11,7 @@ import androidx.work.WorkerParameters
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.domain.ConnectionFormatter
 import com.neddy.ketch.domain.ConnectionSelector
-import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.domain.OriginSelector
 import java.time.Instant
 
 /**
@@ -44,10 +44,14 @@ class WidgetRefreshWorker(
             val watcher = container.watcherRepository.getWatcher(watcherId)
                 ?: return@forEach
             val line = try {
-                val origin = StopPlace(
-                    name = "Current location",
-                    latitude = location?.latitude ?: watcher.triggerLatitude,
-                    longitude = location?.longitude ?: watcher.triggerLongitude,
+                // A cached fix carries whatever speed it was recorded at, which
+                // says nothing about leaving, so the widget always walks.
+                val origin = OriginSelector.select(
+                    watcher = watcher,
+                    latitude = location?.latitude,
+                    longitude = location?.longitude,
+                    speedKmh = null,
+                    carSpeedThresholdKmh = 0,
                 )
                 val connections = container.transitRepository.findConnections(
                     origin = origin,

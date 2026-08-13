@@ -42,3 +42,6 @@
 -keepclassmembers class com.neddy.ketch.data.transit.** {
     *** Companion;
 }
+-keepclassmembers class com.neddy.ketch.data.update.** {
+    *** Companion;
+}

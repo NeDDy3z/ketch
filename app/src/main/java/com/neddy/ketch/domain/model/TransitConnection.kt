@@ -22,9 +22,12 @@ data class TransitLeg(
 
 /**
  * A complete connection from origin to destination composed of transit legs.
+ * [accessWalk] is the walk from the origin to the first boarding — not a leg,
+ * but what decides whether that boarding can be made at all.
  */
 data class TransitConnection(
     val legs: List<TransitLeg>,
+    val accessWalk: Duration = Duration.ZERO,
 ) {
     init {
         require(legs.isNotEmpty()) { "A connection needs at least one transit leg" }

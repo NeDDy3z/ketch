@@ -3,11 +3,11 @@ package com.neddy.ketch.ui.home
 import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.neddy.ketch.data.settings.EditGesture
 import com.neddy.ketch.data.settings.RefreshScope
+import com.neddy.ketch.data.update.AppUpdate
 import com.neddy.ketch.di.AppContainer
 import com.neddy.ketch.domain.ConnectionSelector
-import com.neddy.ketch.domain.model.StopPlace
+import com.neddy.ketch.domain.OriginSelector
 import com.neddy.ketch.domain.model.TransitConnection
 import com.neddy.ketch.domain.model.Watcher
 import com.neddy.ketch.ui.components.userMessageFor
@@ -41,7 +41,8 @@ data class HomeUiState(
     val watcherConnections: List<WatcherConnection> = emptyList(),
     val hasWatchers: Boolean = true,
     val missingApiKey: Boolean = false,
-    val editGesture: EditGesture = EditGesture.TAP,
+    /** A newer release worth prompting about, null when there is nothing to say. */
+    val availableUpdate: AppUpdate? = null,
     val doubleTapOpensMaps: Boolean = true,
     val showResting: Boolean = true,
 ) {
@@ -88,12 +89,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 .collectLatest { settings ->
                     _uiState.update {
                         it.copy(
-                            editGesture = settings.editGesture,
                             doubleTapOpensMaps = settings.doubleTapOpensMaps,
                             showResting = settings.showResting,
                         )
                     }
                 }
+        }
+        // Ketch is sideloaded, so nobody else is going to say a new build
+        // exists. The check throttles and respects the user's last answer.
+        viewModelScope.launch {
+            val update = container.updateRepository.updateToPrompt()
+            if (update != null) _uiState.update { it.copy(availableUpdate = update) }
         }
         // Resting is a function of the clock, not of the data, so nothing else
         // would notice a watcher's window opening. Re-evaluate on a slow tick so
@@ -178,6 +184,23 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             load(watchers)
             _uiState.update { it.copy(refreshing = false) }
         }
+    }
+
+    /** "Later": gone for now, back tomorrow. */
+    fun snoozeUpdate() {
+        _uiState.update { it.copy(availableUpdate = null) }
+        viewModelScope.launch { container.updateRepository.snooze() }
+    }
+
+    /** "Don't remind me again": gone until Settings turns checks back on. */
+    fun dismissUpdatesForever() {
+        _uiState.update { it.copy(availableUpdate = null) }
+        viewModelScope.launch { container.updateRepository.disableChecks() }
+    }
+
+    /** The prompt has handed off to the browser, so it has done its job. */
+    fun updateOpened() {
+        _uiState.update { it.copy(availableUpdate = null) }
     }
 
     fun setShowResting(show: Boolean) {
@@ -314,10 +337,13 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
      * watcher trigger location stands in for it.
      */
     private suspend fun lookup(watcher: Watcher, location: Location?): WatcherConnection = try {
-        val origin = StopPlace(
-            name = "Current location",
-            latitude = location?.latitude ?: watcher.triggerLatitude,
-            longitude = location?.longitude ?: watcher.triggerLongitude,
+        // Browsing the list is not leaving, so a car start never applies here.
+        val origin = OriginSelector.select(
+            watcher = watcher,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            speedKmh = null,
+            carSpeedThresholdKmh = 0,
         )
         val connections = container.transitRepository.findConnections(
             origin = origin,

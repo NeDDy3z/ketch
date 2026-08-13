@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MyLocation
@@ -51,10 +53,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neddy.ketch.BuildConfig
+import com.neddy.ketch.data.update.UpdateRepository
 
 private const val REPO_URL = "https://github.com/NeDDy3z/ketch"
 private const val ISSUES_URL = "$REPO_URL/issues"
 private const val DISCUSSIONS_URL = "$REPO_URL/discussions"
+private const val RELEASES_URL = UpdateRepository.RELEASES_URL
+private const val LATEST_RELEASE_URL = UpdateRepository.LATEST_RELEASE_URL
 
 /** One frequently asked question and its answer. */
 private data class Faq(val question: String, val answer: String)
@@ -82,6 +87,24 @@ private val FAQS = listOf(
         answer = "The widget refreshes on page change and every 15 minutes inside a " +
             "watcher's active window, and is skipped entirely while resting — so it costs " +
             "nothing overnight. Outside every window it keeps the last line and dims it.",
+    ),
+    Faq(
+        question = "What does a long press on a watcher do?",
+        answer = "It opens the watcher's details: the connection you would be told to " +
+            "catch right now, a quicker one worth waiting for when there is one, and " +
+            "the edit and delete actions. A plain tap still opens the editor.",
+    ),
+    Faq(
+        question = "When is the car start used?",
+        answer = "Only when you leave faster than the “Driving above” speed in Settings, " +
+            "which means you took the car. Ketch then routes from the place you park " +
+            "instead of your door. Walk out and nothing changes.",
+    ),
+    Faq(
+        question = "Ketch says I have missed a connection I can still catch",
+        answer = "Routing providers assume a slow walk. Settings → Journey lets you take " +
+            "a percentage off the calculated walking time; 10% is the default. It costs " +
+            "one extra lookup per watcher, so turn it to 0% to halve the quota.",
     ),
     Faq(
         question = "Why is a watcher shown as resting?",
@@ -244,6 +267,40 @@ fun HelpScreen(onBack: () -> Unit) {
                         onClick = { uriHandler.openUri(DISCUSSIONS_URL) },
                     )
                 }
+            }
+
+            HelpGroup(title = "Updates") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer),
+                ) {
+                    OutboundRow(
+                        icon = Icons.Filled.NewReleases,
+                        title = "Latest release",
+                        subtitle = "Release notes and the APK for the newest build",
+                        onClick = { uriHandler.openUri(LATEST_RELEASE_URL) },
+                    )
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    OutboundRow(
+                        icon = Icons.Filled.History,
+                        title = "All releases",
+                        subtitle = "Every version Ketch has shipped",
+                        onClick = { uriHandler.openUri(RELEASES_URL) },
+                    )
+                }
+                Text(
+                    text = "Ketch watches this page and offers the new APK when there " +
+                        "is one. Settings → Updates turns that off or checks now.",
+                    fontSize = 12.sp,
+                    lineHeight = 17.4.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
 
             HelpGroup(title = "About") {

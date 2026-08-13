@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [WatcherEntity::class], version = 3, exportSchema = false)
+@Database(entities = [WatcherEntity::class], version = 4, exportSchema = false)
 abstract class KetchDatabase : RoomDatabase() {
 
     abstract fun watcherDao(): WatcherDao
@@ -30,6 +30,15 @@ abstract class KetchDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the optional car start point, leaving existing watchers on foot. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE watchers ADD COLUMN carStartName TEXT")
+                db.execSQL("ALTER TABLE watchers ADD COLUMN carStartLatitude REAL")
+                db.execSQL("ALTER TABLE watchers ADD COLUMN carStartLongitude REAL")
+            }
+        }
+
         fun get(context: Context): KetchDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -37,7 +46,7 @@ abstract class KetchDatabase : RoomDatabase() {
                     KetchDatabase::class.java,
                     "ketch.db",
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     // Safety net for any version gap without an explicit path.
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

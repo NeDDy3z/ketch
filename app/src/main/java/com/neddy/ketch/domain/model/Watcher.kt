@@ -16,6 +16,12 @@ data class Watcher(
     /** Key of the icon shown for this watcher, see the UI icon catalog. */
     val icon: String = DEFAULT_ICON,
     val destination: StopPlace,
+    /**
+     * Where the car gets parked, for example a park and ride. When set, a leave
+     * fast enough to be a car journey routes from here instead of the door.
+     * Null means every leave is treated as a walk to the nearest stop.
+     */
+    val carStart: StopPlace? = null,
     /** Center of the leave geofence. */
     val triggerLatitude: Double,
     val triggerLongitude: Double,

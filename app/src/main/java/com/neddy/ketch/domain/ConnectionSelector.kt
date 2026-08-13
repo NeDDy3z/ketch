@@ -53,4 +53,28 @@ object ConnectionSelector {
         }
         return preferred
     }
+
+    /**
+     * The connection worth waiting for: it leaves after [main] but spends less
+     * time travelling, so hanging back buys a shorter journey. The soonest such
+     * departure wins, ties going to the earlier arrival. Null when leaving now
+     * on [main] is simply the best there is.
+     */
+    fun selectQuickerAlternative(
+        connections: List<TransitConnection>,
+        main: TransitConnection,
+        maxTransfers: Int? = null,
+        maxTravelMinutes: Int? = null,
+    ): TransitConnection? = connections
+        .filter { connection ->
+            connection != main &&
+                connection.departureTime.isAfter(main.departureTime) &&
+                connection.travelDuration < main.travelDuration &&
+                (maxTransfers == null || connection.transfers <= maxTransfers) &&
+                (
+                    maxTravelMinutes == null ||
+                        connection.travelDuration <= Duration.ofMinutes(maxTravelMinutes.toLong())
+                    )
+        }
+        .minWithOrNull(compareBy({ it.departureTime }, { it.arrivalTime }))
 }

@@ -14,7 +14,8 @@ interface RoutesApiService {
     suspend fun computeRoutes(
         @Header("X-Goog-Api-Key") apiKey: String,
         @Header("X-Goog-FieldMask") fieldMask: String =
-            "routes.legs.steps.travelMode,routes.legs.steps.transitDetails",
+            "routes.legs.steps.travelMode,routes.legs.steps.staticDuration," +
+                "routes.legs.steps.transitDetails",
         @Body request: ComputeRoutesRequest,
     ): ComputeRoutesResponse
 }

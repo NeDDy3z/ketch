@@ -398,14 +398,7 @@ private fun WatcherCard(
                             .roundedCorners(10.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Image(
-                            provider = ImageProvider(widgetIcon(entry.icon)),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(
-                                GlanceTheme.colors.onPrimaryContainer,
-                            ),
-                            modifier = GlanceModifier.size(17.dp),
-                        )
+                        WatcherGlyph(iconKey = entry.icon, size = 17.dp)
                     }
                     Spacer(modifier = GlanceModifier.width(9.dp))
                 }
@@ -622,19 +615,83 @@ private fun LegChip(leg: WidgetLeg, more: Boolean, maxCode: Int) {
 /**
  * Resource twin of [com.neddy.ketch.ui.components.watcherIconCatalog]. Glance
  * renders in a remote process and can only take drawable resources, so the
- * app's Compose icons cannot be reused directly.
+ * app's Compose icons cannot be reused directly. A [place] is the backdrop of a
+ * combined icon, with [icon] badged over it.
  */
-private fun widgetIcon(key: String): Int = when (key) {
-    "bus" -> R.drawable.ic_vehicle_bus
-    "tram" -> R.drawable.ic_vehicle_tram
-    "home" -> R.drawable.ic_watcher_home
-    "work" -> R.drawable.ic_watcher_work
-    "school" -> R.drawable.ic_watcher_school
-    "shopping" -> R.drawable.ic_watcher_shopping
-    "gym" -> R.drawable.ic_watcher_gym
-    "star" -> R.drawable.ic_watcher_star
-    "favorite" -> R.drawable.ic_watcher_favorite
-    else -> R.drawable.ic_vehicle_rail
+private data class WidgetIconSpec(val icon: Int, val place: Int? = null)
+
+private fun widgetIconSpec(key: String): WidgetIconSpec = when (key) {
+    "bus" -> WidgetIconSpec(R.drawable.ic_vehicle_bus)
+    "tram" -> WidgetIconSpec(R.drawable.ic_vehicle_tram)
+    "car" -> WidgetIconSpec(R.drawable.ic_watcher_car)
+    "walk" -> WidgetIconSpec(R.drawable.ic_watcher_walk)
+    "home" -> WidgetIconSpec(R.drawable.ic_watcher_home)
+    "home_car" -> WidgetIconSpec(R.drawable.ic_watcher_car, R.drawable.ic_watcher_home)
+    "home_walk" -> WidgetIconSpec(R.drawable.ic_watcher_walk, R.drawable.ic_watcher_home)
+    "work" -> WidgetIconSpec(R.drawable.ic_watcher_work)
+    "work_car" -> WidgetIconSpec(R.drawable.ic_watcher_car, R.drawable.ic_watcher_work)
+    "work_walk" -> WidgetIconSpec(R.drawable.ic_watcher_walk, R.drawable.ic_watcher_work)
+    "school" -> WidgetIconSpec(R.drawable.ic_watcher_school)
+    "shopping" -> WidgetIconSpec(R.drawable.ic_watcher_shopping)
+    "gym" -> WidgetIconSpec(R.drawable.ic_watcher_gym)
+    "star" -> WidgetIconSpec(R.drawable.ic_watcher_star)
+    "favorite" -> WidgetIconSpec(R.drawable.ic_watcher_favorite)
+    else -> WidgetIconSpec(R.drawable.ic_vehicle_rail)
+}
+
+/**
+ * The watcher icon inside its tile. A combined icon stacks the place glyph and
+ * a badged transport glyph, the badge sitting in a disc of the tile colour so
+ * the two shapes do not merge — the same treatment the app screens use.
+ */
+@Composable
+private fun WatcherGlyph(iconKey: String, size: Dp) {
+    val spec = widgetIconSpec(iconKey)
+    val tint = ColorFilter.tint(GlanceTheme.colors.onPrimaryContainer)
+    val place = spec.place
+    if (place == null) {
+        Image(
+            provider = ImageProvider(spec.icon),
+            contentDescription = null,
+            colorFilter = tint,
+            modifier = GlanceModifier.size(size),
+        )
+        return
+    }
+    Box(modifier = GlanceModifier.size(size)) {
+        // Glance aligns every child of a Box the same way, so each layer is its
+        // own full-size Box with the alignment it needs.
+        Box(
+            modifier = GlanceModifier.fillMaxSize(),
+            contentAlignment = Alignment.TopStart,
+        ) {
+            Image(
+                provider = ImageProvider(place),
+                contentDescription = null,
+                colorFilter = tint,
+                modifier = GlanceModifier.size(size * 0.82f),
+            )
+        }
+        Box(
+            modifier = GlanceModifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomEnd,
+        ) {
+            Box(
+                modifier = GlanceModifier
+                    .size(size * 0.62f)
+                    .background(GlanceTheme.colors.primaryContainer)
+                    .roundedCorners(size * 0.31f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(spec.icon),
+                    contentDescription = null,
+                    colorFilter = tint,
+                    modifier = GlanceModifier.size(size * 0.46f),
+                )
+            }
+        }
+    }
 }
 
 private fun vehicleGlyph(vehicleType: String): Int = when (vehicleType.uppercase()) {

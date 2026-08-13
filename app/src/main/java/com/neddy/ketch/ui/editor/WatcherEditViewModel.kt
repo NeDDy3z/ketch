@@ -33,6 +33,11 @@ data class EditUiState(
     val triggerSearching: Boolean = false,
     val triggerSearchError: String? = null,
     val triggerRadiusMeters: Int = 150,
+    val carStart: StopPlace? = null,
+    val carStartQuery: String = "",
+    val carStartResults: List<PlaceSuggestion> = emptyList(),
+    val carStartSearching: Boolean = false,
+    val carStartSearchError: String? = null,
     val activeDays: Set<DayOfWeek> = emptySet(),
     val windowStartMinutes: Int = 7 * 60,
     val windowEndMinutes: Int = 9 * 60,
@@ -64,6 +69,7 @@ class WatcherEditViewModel(
 
     private var searchJob: Job? = null
     private var triggerSearchJob: Job? = null
+    private var carStartSearchJob: Job? = null
     private var editedWatcher: Watcher? = null
 
     init {
@@ -97,6 +103,8 @@ class WatcherEditViewModel(
                     watcher.triggerLongitude,
                 ),
                 triggerRadiusMeters = watcher.triggerRadiusMeters,
+                carStart = watcher.carStart,
+                carStartQuery = watcher.carStart?.name.orEmpty(),
                 activeDays = watcher.activeDays,
                 windowStartMinutes = watcher.windowStartMinutes,
                 windowEndMinutes = watcher.windowEndMinutes,
@@ -255,6 +263,110 @@ class WatcherEditViewModel(
     fun setTriggerRadius(meters: Int) =
         _uiState.update { it.copy(triggerRadiusMeters = meters) }
 
+    /**
+     * Searches places for the car start point. Same shape as the trigger
+     * search, except an empty query means "no car start" rather than an
+     * unfinished edit, because the whole field is optional.
+     */
+    fun setCarStartQuery(query: String) {
+        _uiState.update {
+            it.copy(
+                carStartQuery = query,
+                carStart = if (query.isBlank()) null else it.carStart,
+            )
+        }
+        carStartSearchJob?.cancel()
+        if (query.length < 3) {
+            _uiState.update {
+                it.copy(
+                    carStartResults = emptyList(),
+                    carStartSearching = false,
+                    carStartSearchError = null,
+                )
+            }
+            return
+        }
+        carStartSearchJob = viewModelScope.launch {
+            delay(400)
+            _uiState.update { it.copy(carStartSearching = true, carStartSearchError = null) }
+            try {
+                val results = container.transitRepository.searchAddresses(query)
+                _uiState.update {
+                    it.copy(
+                        carStartResults = results,
+                        carStartSearching = false,
+                        carStartSearchError = if (results.isEmpty()) {
+                            "No places found for \"$query\""
+                        } else {
+                            null
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        carStartResults = emptyList(),
+                        carStartSearching = false,
+                        carStartSearchError = userMessageFor(e),
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectCarStartSuggestion(suggestion: PlaceSuggestion) {
+        setCarStart(
+            StopPlace(
+                name = suggestion.name,
+                latitude = suggestion.latitude,
+                longitude = suggestion.longitude,
+            ),
+        )
+    }
+
+    /** A map pick resolves to the nearest stop, since the car is parked at one. */
+    fun pickCarStartOnMap(latitude: Double, longitude: Double) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(carStartSearching = true, carStartSearchError = null) }
+            val stop = try {
+                container.transitRepository.nearestStop(latitude, longitude)
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(carStartSearching = false, carStartSearchError = userMessageFor(e))
+                }
+                return@launch
+            } ?: StopPlace(
+                name = "Dropped pin (%.5f, %.5f)".format(latitude, longitude),
+                latitude = latitude,
+                longitude = longitude,
+            )
+            _uiState.update { it.copy(carStartSearching = false) }
+            setCarStart(stop)
+        }
+    }
+
+    private fun setCarStart(stop: StopPlace) {
+        _uiState.update {
+            it.copy(
+                carStart = stop,
+                carStartQuery = stop.name,
+                carStartResults = emptyList(),
+                carStartSearchError = null,
+            )
+        }
+    }
+
+    fun clearCarStart() {
+        _uiState.update {
+            it.copy(
+                carStart = null,
+                carStartQuery = "",
+                carStartResults = emptyList(),
+                carStartSearchError = null,
+            )
+        }
+    }
+
     /** Precise device position for the map picker, null without a fix. */
     suspend fun currentLocation(): Pair<Double, Double>? =
         container.locationProvider.currentLocation(precise = true)
@@ -351,6 +463,7 @@ class WatcherEditViewModel(
                 name = state.name.trim(),
                 icon = state.icon,
                 destination = destination,
+                carStart = state.carStart,
                 triggerLatitude = triggerLatitude,
                 triggerLongitude = triggerLongitude,
                 triggerRadiusMeters = state.triggerRadiusMeters,

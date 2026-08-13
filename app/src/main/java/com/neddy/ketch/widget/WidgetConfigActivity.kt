@@ -56,7 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neddy.ketch.appContainer
 import com.neddy.ketch.data.settings.ColorPalette
 import com.neddy.ketch.domain.model.Watcher
-import com.neddy.ketch.ui.components.watcherIcon
+import com.neddy.ketch.ui.components.WatcherIcon
 import com.neddy.ketch.ui.theme.KetchTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -344,29 +344,28 @@ private fun WatcherCard(
                     checked = checked,
                     onCheckedChange = null,
                 )
+                val tile = if (checked) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                }
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .alpha(contentAlpha)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (checked) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            },
-                        ),
+                        .background(tile),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = watcherIcon(watcher.icon),
-                        contentDescription = null,
+                    WatcherIcon(
+                        iconKey = watcher.icon,
+                        size = 20.dp,
                         tint = if (checked) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.size(20.dp),
+                        badgeBackground = tile,
                     )
                 }
                 Text(

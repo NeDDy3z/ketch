@@ -9,6 +9,8 @@ import com.neddy.ketch.data.transit.TransitRepository
 import com.neddy.ketch.data.transit.google.GoogleTransitRepository
 import com.neddy.ketch.data.transit.google.PlacesApiService
 import com.neddy.ketch.data.transit.google.RoutesApiService
+import com.neddy.ketch.data.update.GitHubApiService
+import com.neddy.ketch.data.update.UpdateRepository
 import com.neddy.ketch.trigger.GeofenceManager
 import com.neddy.ketch.trigger.NotificationHelper
 import com.neddy.ketch.trigger.TriggerSyncRequester
@@ -53,6 +55,14 @@ class AppContainer(context: Context) {
                 .create(RoutesApiService::class.java),
             placesApi = retrofit("https://places.googleapis.com/")
                 .create(PlacesApiService::class.java),
+            settingsRepository = settingsRepository,
+        )
+    }
+
+    val updateRepository: UpdateRepository by lazy {
+        UpdateRepository(
+            api = retrofit("https://api.github.com/")
+                .create(GitHubApiService::class.java),
             settingsRepository = settingsRepository,
         )
     }
